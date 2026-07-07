@@ -265,15 +265,16 @@ files = [
 
 [[package]]
 name = "click"
-version = "8.1.8"
+version = "8.4.2"
 description = "Composable command line interface toolkit"
 optional = false
-python-versions = ">=3.7"
-groups = ["dev"]
+python-versions = ">=3.10"
+groups = ["main", "dev"]
 files = [
-    {file = "click-8.1.8-py3-none-any.whl", hash = "sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2"},
-    {file = "click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a"},
+    {file = "click-8.4.2-py3-none-any.whl", hash = "sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76"},
+    {file = "click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6"},
 ]
+markers = {main = "extra == \"all\" or extra == \"hub\""}
 
 [package.dependencies]
 colorama = {version = "*", markers = "platform_system == \"Windows\""}
@@ -289,7 +290,7 @@ files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
 ]
-markers = {main = "platform_system == \"Windows\" or sys_platform == \"win32\"", benchmark = "sys_platform == \"win32\""}
+markers = {main = "sys_platform == \"win32\" or platform_system == \"Windows\"", benchmark = "sys_platform == \"win32\""}
 
 [[package]]
 name = "coverage"
@@ -433,7 +434,7 @@ files = [
     {file = "filelock-3.29.4-py3-none-any.whl", hash = "sha256:dac1648087d5115554850d113e7dd8c83ab2d38e3435dde2d4f163847e57b767"},
     {file = "filelock-3.29.4.tar.gz", hash = "sha256:10cdb3656fc44541cdf30652a93fb10ec6b05325620eb316bd26893e4201538a"},
 ]
-markers = {main = "extra == \"hub\" or extra == \"all\""}
+markers = {main = "extra == \"all\" or extra == \"hub\""}
 
 [[package]]
 name = "fsspec"
@@ -442,7 +443,7 @@ description = "File-system specification"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"hub\" or extra == \"all\""
+markers = "extra == \"all\" or extra == \"hub\""
 files = [
     {file = "fsspec-2026.6.0-py3-none-any.whl", hash = "sha256:02e0b71817df9b2169dc30a16832045764def1191b43dcff5bb85bdee212d2a1"},
     {file = "fsspec-2026.6.0.tar.gz", hash = "sha256:f5bac145310fe30e16e1471bd6840b2d990d609e872251d7e674241822abf01a"},
@@ -507,6 +508,45 @@ files = [
 ]
 
 [[package]]
+name = "hf-xet"
+version = "1.5.1"
+description = "Fast transfer of large files with the Hugging Face Hub."
+optional = true
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "(extra == \"all\" or extra == \"hub\") and (platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"AMD64\" or platform_machine == \"arm64\" or platform_machine == \"aarch64\")"
+files = [
+    {file = "hf_xet-1.5.1-cp313-cp313t-macosx_10_12_x86_64.whl", hash = "sha256:dbf48c0d02cf0b2e568944330c60d9120c272dabe013bd892d48e25bc6797577"},
+    {file = "hf_xet-1.5.1-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:e78e4e5192ad2b674c2e1160b651cb9134db974f8ae1835bdfbfb0166b894a43"},
+    {file = "hf_xet-1.5.1-cp313-cp313t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:6f7a04a8ad962422e225bc49fbbac99dc1806764b1f3e54dbd154bffa7593947"},
+    {file = "hf_xet-1.5.1-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:d48199c2bf4f8df0adc55d31d1368b6ec0e4d4f45bc86b08038089c23db0bed8"},
+    {file = "hf_xet-1.5.1-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:97f212a88d14bbf573619a74b7fecb238de77d08fc702e54dec6f78276ca3283"},
+    {file = "hf_xet-1.5.1-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:f61e3665892a6c8c5e765395838b8ddf36185da835253d4bc4509a81e49fb342"},
+    {file = "hf_xet-1.5.1-cp313-cp313t-win_amd64.whl", hash = "sha256:f4ad3ebd4c32dd2b27099d69dc7b2df821e30767e46fb6ee6a0713778243b8ff"},
+    {file = "hf_xet-1.5.1-cp313-cp313t-win_arm64.whl", hash = "sha256:8298485c1e36e7e67cbd01eeb1376619b7af43d4f1ec245caae306f890a8a32d"},
+    {file = "hf_xet-1.5.1-cp314-cp314t-macosx_10_12_x86_64.whl", hash = "sha256:3474760d10e3bb6f92ff3f024fcb00c0b3e4001e9b035c7483e49a5dd17aa70f"},
+    {file = "hf_xet-1.5.1-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:6762d89b9e3267dfd502b29b2a327b4525f33b17e7b509a78d94e2151a30ce30"},
+    {file = "hf_xet-1.5.1-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:bf67e6ed10260cef62e852789dc91ebb03f382d5bdc4b1dbeb64763ea275e7d6"},
+    {file = "hf_xet-1.5.1-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:c6b6cd08ca095058780b50b8ce4d6cbf6787bcf27841705d58a9d32246e3e47a"},
+    {file = "hf_xet-1.5.1-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:e1af0de8ca6f190d4294a28b88023db64a1e2d1d719cab044baf75bec569e7a9"},
+    {file = "hf_xet-1.5.1-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:4f561cbbb92f80960772059864b7fb07eae879adde1b2e781ec6f86f6ac26c59"},
+    {file = "hf_xet-1.5.1-cp314-cp314t-win_amd64.whl", hash = "sha256:e7dbb40617410f432182d918e37c12303fe6700fd6aa6c5964e30a535a4461d6"},
+    {file = "hf_xet-1.5.1-cp314-cp314t-win_arm64.whl", hash = "sha256:6071d5ccb4d8d2cbd5fea5cc798da4f0ba3f44e25369591c4e89a4987050e61d"},
+    {file = "hf_xet-1.5.1-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:6abd35c3221eff63836618ddfb954dcf84798603f71d8e33e3ed7b04acfdbe6e"},
+    {file = "hf_xet-1.5.1-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:94e761bbd266bf4c03cee73753916062665ce8365aa40ed321f45afcb934b41e"},
+    {file = "hf_xet-1.5.1-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:892e3a3a3aecc12aded8b93cf4f9cd059282c7de0732f7d55026f3abdf474350"},
+    {file = "hf_xet-1.5.1-cp37-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:a93df2039190502835b1db8cd7e178b0b7b889fe9ab51299d5ced26e0dd879a4"},
+    {file = "hf_xet-1.5.1-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:0c97106032ef70467b4f6bc2d0ccc266d7613ee076afc56516c502f87ce1c4a6"},
+    {file = "hf_xet-1.5.1-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:6208adb15d192b90e4c2ad2a27ed864359b2cb0f2494eb6d7c7f3699ac02e2bf"},
+    {file = "hf_xet-1.5.1-cp37-abi3-win_amd64.whl", hash = "sha256:f7b3002f95d1c13e24bcb4537baa8f0eb3838957067c91bb4959bc004a6435f5"},
+    {file = "hf_xet-1.5.1-cp37-abi3-win_arm64.whl", hash = "sha256:93d090b57b211133f6c0dab0205ef5cb6d89162979ba75a74845045cc3063b8e"},
+    {file = "hf_xet-1.5.1.tar.gz", hash = "sha256:51ef4500dab3764b41135ee1381a4b62ce56fc54d4c92b719b59e597d6df5bf6"},
+]
+
+[package.extras]
+tests = ["pytest"]
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 description = "A minimal low-level HTTP client."
@@ -555,39 +595,40 @@ zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
 name = "huggingface-hub"
-version = "0.23.5"
+version = "1.22.0"
 description = "Client library to download and publish models, datasets and other repos on the huggingface.co hub"
 optional = true
-python-versions = ">=3.8.0"
+python-versions = ">=3.10.0"
 groups = ["main"]
-markers = "extra == \"hub\" or extra == \"all\""
+markers = "extra == \"all\" or extra == \"hub\""
 files = [
-    {file = "huggingface_hub-0.23.5-py3-none-any.whl", hash = "sha256:d7a7d337615e11a45cc14a0ce5a605db6b038dc24af42866f731684825226e90"},
-    {file = "huggingface_hub-0.23.5.tar.gz", hash = "sha256:67a9caba79b71235be3752852ca27da86bd54311d2424ca8afdb8dda056edf98"},
+    {file = "huggingface_hub-1.22.0-py3-none-any.whl", hash = "sha256:b09e19309ae09ee0a71892701c4fe70af39ab4e00817321dc62f2289a977249b"},
+    {file = "huggingface_hub-1.22.0.tar.gz", hash = "sha256:e2dfe5fe1ec3b87ba2709aa34555b23e3f3f6ad4d7255238e13ddb8348e6bbfa"},
 ]
 
 [package.dependencies]
-filelock = "*"
+click = ">=8.4.2,<9.0.0"
+filelock = ">=3.10.0"
 fsspec = ">=2023.5.0"
+hf-xet = {version = ">=1.5.1,<2.0.0", markers = "platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"AMD64\" or platform_machine == \"arm64\" or platform_machine == \"aarch64\""}
+httpx = ">=0.23.0,<1"
 packaging = ">=20.9"
 pyyaml = ">=5.1"
-requests = "*"
 tqdm = ">=4.42.1"
-typing-extensions = ">=3.7.4.3"
+typing-extensions = ">=4.1.0"
 
 [package.extras]
-all = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio", "jedi", "minijinja (>=1.0)", "mypy (==1.5.1)", "numpy", "pytest", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.3.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
-cli = ["InquirerPy (==0.3.4)"]
-dev = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio", "jedi", "minijinja (>=1.0)", "mypy (==1.5.1)", "numpy", "pytest", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.3.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
+all = ["Jinja2", "Pillow", "authlib (>=1.3.2)", "duckdb", "fastapi", "fastapi", "httpx", "itsdangerous", "jedi", "libcst (>=1.4.0)", "mypy (==1.15.0)", "numpy", "pytest (>=8.4.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures (<16.0)", "pytest-vcr", "pytest-xdist", "ruff (>=0.9.0)", "soundfile", "ty", "types-PyYAML", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
+dev = ["Jinja2", "Pillow", "authlib (>=1.3.2)", "duckdb", "fastapi", "fastapi", "httpx", "itsdangerous", "jedi", "libcst (>=1.4.0)", "mypy (==1.15.0)", "numpy", "pytest (>=8.4.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures (<16.0)", "pytest-vcr", "pytest-xdist", "ruff (>=0.9.0)", "soundfile", "ty", "types-PyYAML", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
 fastai = ["fastai (>=2.4)", "fastcore (>=1.3.27)", "toml"]
-hf-transfer = ["hf-transfer (>=0.1.4)"]
-inference = ["aiohttp", "minijinja (>=1.0)"]
-quality = ["mypy (==1.5.1)", "ruff (>=0.3.0)"]
-tensorflow = ["graphviz", "pydot", "tensorflow"]
-tensorflow-testing = ["keras (<3.0)", "tensorflow"]
-testing = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio", "jedi", "minijinja (>=1.0)", "numpy", "pytest", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "soundfile", "urllib3 (<2.0)"]
-torch = ["safetensors", "torch"]
-typing = ["types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)"]
+gradio = ["gradio (>=5.0.0)", "requests"]
+hf-xet = ["hf-xet (>=1.5.1,<2.0.0)"]
+mcp = ["mcp (>=1.8.0)"]
+oauth = ["authlib (>=1.3.2)", "fastapi", "httpx", "itsdangerous"]
+quality = ["libcst (>=1.4.0)", "mypy (==1.15.0)", "ruff (>=0.9.0)", "ty"]
+testing = ["Jinja2", "Pillow", "authlib (>=1.3.2)", "duckdb", "fastapi", "fastapi", "httpx", "itsdangerous", "jedi", "numpy", "pytest (>=8.4.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures (<16.0)", "pytest-vcr", "pytest-xdist", "soundfile", "urllib3 (<2.0)"]
+torch = ["safetensors[torch]", "torch"]
+typing = ["types-PyYAML", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)"]
 
 [[package]]
 name = "hypothesis"
@@ -1354,7 +1395,7 @@ files = [
     {file = "packaging-26.2-py3-none-any.whl", hash = "sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e"},
     {file = "packaging-26.2.tar.gz", hash = "sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661"},
 ]
-markers = {main = "extra == \"hub\" or extra == \"all\""}
+markers = {main = "extra == \"all\" or extra == \"hub\""}
 
 [[package]]
 name = "paginate"
@@ -1455,7 +1496,7 @@ description = "Python library for Apache Arrow"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"parquet\" or extra == \"all\""
+markers = "extra == \"all\" or extra == \"parquet\""
 files = [
     {file = "pyarrow-24.0.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:7c2b98645d576a0b9616892ead22b64a83a5f043c5e2ca15ebcefcb5b70c80cb"},
     {file = "pyarrow-24.0.0-cp310-cp310-macosx_12_0_x86_64.whl", hash = "sha256:644a246325b8c69c595ad1dd4b463eba4b0cdb731370e4a86137d433208d6147"},
@@ -2348,7 +2389,7 @@ description = "Fast, Extensible Progress Meter"
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"hub\" or extra == \"all\""
+markers = "extra == \"all\" or extra == \"hub\""
 files = [
     {file = "tqdm-4.68.2-py3-none-any.whl", hash = "sha256:d4240441fb5353290b87d6a85968c9decc131a99b8c7faa28269d829de669ede"},
     {file = "tqdm-4.68.2.tar.gz", hash = "sha256:89c230e8dbc67c7615c142487111222f878c77427ea09549960f62389e258add"},
@@ -2527,4 +2568,4 @@ parquet = ["pyarrow"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "6f27c2ba928eefe7e8ab7bd398d766ccec7261e0f73f90b2ae8a204d129e2c9f"
+content-hash = "2d9678e2890e60cfcd8ebb329239b6507f0f9a0cd8675176946812be084f057e"
