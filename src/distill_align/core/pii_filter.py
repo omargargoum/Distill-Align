@@ -159,7 +159,7 @@ class PIIScanner:
 
     # Generic API key / bearer token
     BEARER_TOKEN: ClassVar[re.Pattern] = re.compile(
-        r"(?:(?i)(?:bearer|token|apikey|api_key|api-key|secret)[:\s=]+)[a-zA-Z0-9_\-\.]{16,64}"
+        r"(?i)(?:(?:bearer|token|apikey|api_key|api-key|secret)[:\s=]+)[a-zA-Z0-9_\-\.]{16,64}"
     )
 
     # JWT tokens (three base64url segments separated by dots)

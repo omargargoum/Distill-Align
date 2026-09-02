@@ -4,6 +4,14 @@ All notable changes to Distill-Align will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Unit tests for the PII filter, pruner, judge, conversation builder, ingestion pipeline, and preference formatter (coverage 43% → 50%)
+
+### Fixed
+- PII filter import crash caused by an inline `(?i)` regex flag in the middle of the bearer-token pattern, which broke the `scan_pii` ingestion path
+
 ## [0.1.1] - 2026-06-18
 
 ### Fixed
