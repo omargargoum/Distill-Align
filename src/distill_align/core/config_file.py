@@ -168,7 +168,7 @@ export:
     num_epochs: 3
     learning_rate: 0.0002
 
-	# Custom providers (optional)
+  # Custom providers (optional)
 # Add any OpenAI-compatible, Anthropic-compatible, or other API providers:
 # custom_providers:
 #   - name: groq
