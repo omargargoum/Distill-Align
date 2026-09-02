@@ -112,9 +112,7 @@ class TestExtractJson:
     """JSON extraction from LLM responses."""
 
     def test_extract_from_code_block(self, pruner):
-        content = (
-            'Some prose.\n```json\n{"conversation": [{"role": "user", "content": "Q"}]}\n```\nMore prose.'
-        )
+        content = 'Some prose.\n```json\n{"conversation": [{"role": "user", "content": "Q"}]}\n```\nMore prose.'
         parsed = pruner.extract_json_from_response(content)
         assert parsed is not None
         assert parsed["conversation"][0]["role"] == "user"

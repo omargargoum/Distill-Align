@@ -45,7 +45,9 @@ class FakeJudgeClient(BaseLLMClient):
             raise LLMClientError("transient failure")
         return LLMResponse(content=self.response_content, model=self.model)
 
-    async def complete(self, prompt: str, temperature: float = 0.7, max_tokens: int | None = None, **kwargs) -> LLMResponse:
+    async def complete(
+        self, prompt: str, temperature: float = 0.7, max_tokens: int | None = None, **kwargs
+    ) -> LLMResponse:
         return LLMResponse(content="", model=self.model)
 
 

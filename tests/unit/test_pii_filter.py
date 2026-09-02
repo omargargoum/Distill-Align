@@ -76,9 +76,7 @@ class TestDetection:
         assert result.findings[0].severity == "critical"
 
     def test_aws_secret_key(self, pii_filter):
-        result = pii_filter.scan_text(
-            "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-        )
+        result = pii_filter.scan_text("aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
         assert _finding_types(result) == ["aws_secret_key"]
 
     def test_github_token(self, pii_filter):
@@ -113,11 +111,7 @@ class TestDetection:
         assert result.findings[0].severity == "high"
 
     def test_ssh_private_key(self, pii_filter):
-        key = (
-            "-----BEGIN RSA PRIVATE KEY-----\n"
-            "MIIEpAIBAAKCAQEA7eZexampleonlycontent\n"
-            "-----END RSA PRIVATE KEY-----"
-        )
+        key = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA7eZexampleonlycontent\n-----END RSA PRIVATE KEY-----"
         result = pii_filter.scan_text(key)
         assert _finding_types(result) == ["ssh_private_key"]
         assert result.findings[0].severity == "critical"

@@ -37,7 +37,9 @@ class FakeLLMClient(BaseLLMClient):
             raise self.error
         return LLMResponse(content=self.response, model=self.model)
 
-    async def complete(self, prompt: str, temperature: float = 0.7, max_tokens: int | None = None, **kwargs) -> LLMResponse:
+    async def complete(
+        self, prompt: str, temperature: float = 0.7, max_tokens: int | None = None, **kwargs
+    ) -> LLMResponse:
         return LLMResponse(content="", model=self.model)
 
 
