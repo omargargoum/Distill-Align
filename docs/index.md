@@ -8,7 +8,7 @@ Generate high-quality fine-tuning datasets from raw domain data using frontier r
 
 - :material-download: **Install** — `pip install distill-align`
 - :material-github: **Source** — [github.com/omargargoum/Distill-Align](https://github.com/omargargoum/Distill-Align)
-- :material-tag: **Version** — 0.1.1
+- :material-tag: **Version** — 0.3.0
 - :material-license: **License** — MIT
 
 </div>
@@ -38,7 +38,7 @@ export OPENAI_API_KEY=sk-...
 distill-align ingest --source ./docs --output chunks.json
 
 # 4. Generate conversations
-distill-align synthesize --input chunks.json --provider openai --model gpt-4o
+distill-align synthesize --input chunks.json --provider openai --model gpt-5-mini
 
 # 5. Export for training
 distill-align export --input conversations.json --format sharegpt --split
@@ -48,12 +48,13 @@ distill-align export --input conversations.json --format sharegpt --split
 
 | Feature | Description |
 |---------|-------------|
-| **9 File Loaders** | Markdown, PDF, DOCX, HTML, Jupyter, JSON, CSV, Code (20+ languages), Text |
-| **6 LLM Providers** | OpenAI, Anthropic, Gemini, Azure, Ollama, vLLM |
-| **Socratic Transformer** | Converts raw content into guided multi-turn Q&A |
+| **9 File Loaders** | Markdown, PDF, DOCX, HTML, Jupyter, JSON, CSV, Code (11 language families), Text (+ Docling) |
+| **14 LLM Providers** | OpenAI, Anthropic, Gemini, Azure, Ollama, vLLM, Qwen, OpenRouter, LiteLLM, Together, Groq, Mistral, DeepSeek, Cohere |
+| **86-Model Catalog** | Sep-2026 IDs, pricing, context windows — [Models & Pricing](models.md) |
+| **Socratic Transformer** | Converts raw content into guided multi-turn Q&A (+ Evol-Instruct, RAG-QA, tool-call, safety, distill modes) |
 | **Scaffold Action** | Strips filler, extracts clean structured output |
-| **LLM-as-Judge** | Automated quality scoring on 5 criteria |
-| **7 Export Formats** | ShareGPT, Alpaca, ChatML, HuggingFace, JSONL, Parquet, DPO Pairs |
+| **LLM-as-Judge** | Automated quality scoring (7 rubrics, dual-judge, CI `evaluate` gate) |
+| **14 Export Formats** | ShareGPT, Alpaca, ChatML, HuggingFace, JSONL, Parquet, DPO/ORPO/KTO/GRPO, agent, RAG-QA |
 | **Job Checkpoints** | Resume failed synthesis jobs from last checkpoint |
 | **Cost Tracking** | Estimate costs across all providers |
 | **TUI Dashboard** | Real-time interactive monitoring |
@@ -73,6 +74,12 @@ distill-align export --input conversations.json --format sharegpt --split
     ---
 
     Config file, environment variables, and advanced options.
+
+-   :material-database: **[Models & Pricing](models.md)**
+
+    ---
+
+    Every supported model, Sep-2026 prices, and how to pick a teacher.
 
 -   :material-console: **[CLI Reference](cli-reference.md)**
 
@@ -104,12 +111,18 @@ distill-align export --input conversations.json --format sharegpt --split
 
 | Provider | API Key | Structured Output | Local |
 |----------|---------|-------------------|-------|
-| OpenAI | `OPENAI_API_KEY` | ✓ | — |
-| Anthropic | `ANTHROPIC_API_KEY` | ✓ (JSON mode) | — |
-| Google Gemini | `GEMINI_API_KEY` | ✓ (MIME type) | — |
+| OpenAI | `OPENAI_API_KEY` | ✓ (strict) | — |
+| Anthropic | `ANTHROPIC_API_KEY` | ✓ (`output_config`, GA) | — |
+| Google Gemini | `GEMINI_API_KEY` | ✓ (`responseSchema`) | — |
 | Azure OpenAI | `AZURE_OPENAI_API_KEY` | ✓ | — |
-| Ollama | None | — | ✓ |
-| vLLM | None (or API key) | ✓ (OpenAI-compatible) | ✓ |
+| Alibaba Qwen | `DASHSCOPE_API_KEY` | ✓ (OpenAI-compatible) | — |
+| DeepSeek | `DEEPSEEK_API_KEY` | ✓ (OpenAI-compatible) | — |
+| Mistral | `MISTRAL_API_KEY` | ✓ (OpenAI-compatible) | — |
+| OpenRouter / LiteLLM / Together / Groq / Cohere | provider key | ✓ (gateway) | — |
+| Ollama | None | ✓ (schema `format`) | ✓ |
+| vLLM | None (or API key) | ✓ (`guided_json`) | ✓ |
+
+Full model list: [Models & Pricing](models.md).
 
 ## License
 

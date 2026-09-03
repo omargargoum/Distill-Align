@@ -162,7 +162,7 @@ def synthesize(
     input: str = typer.Argument(..., help="Input chunks JSON file"),
     output: str = typer.Option("./conversations.json", "--output", "-o", help="Output file path"),
     provider: str = typer.Option("openai", "--provider", "-p", help="LLM provider"),
-    model: str = typer.Option("gpt-4o", "--model", "-m", help="Model name"),
+    model: str = typer.Option("gpt-5-mini", "--model", "-m", help="Model name"),
     base_url: str | None = typer.Option(None, "--base-url", help="API base URL"),
     api_key: str | None = typer.Option(None, "--api-key", help="API key (or use env var)"),
     concurrency: int = typer.Option(5, "--concurrency", "-c", help="Max concurrent requests"),
@@ -172,7 +172,11 @@ def synthesize(
     no_cache: bool = typer.Option(False, "--no-cache", flag_value=True, help="Disable caching"),
     no_checkpoint: bool = typer.Option(False, "--no-checkpoint", flag_value=True, help="Disable checkpointing"),
     prompt_dir: str | None = typer.Option(None, "--prompts", help="Custom prompts directory"),
-    mode: str = typer.Option("default", "--mode", help="Conversation mode: default, teach, debug, review, qa, explain"),
+    mode: str = typer.Option(
+        "default",
+        "--mode",
+        help="Conversation mode: default, teach, debug, review, qa, explain, evol_instruct, rag_qa, tool_call, constitutional, distill",
+    ),
     judge: bool = typer.Option(False, "--judge", flag_value=True, help="Enable LLM-as-judge evaluation"),
     judge_model: str | None = typer.Option(None, "--judge-model", help="Model for judge (defaults to --model)"),
     max_tokens: int | None = typer.Option(
@@ -183,7 +187,7 @@ def synthesize(
     from ..core.cache import CacheManager
     from ..core.checkpoint import CheckpointManager
     from ..core.schemas import DataChunk
-    from ..synthesis.conversation_builder import ConversationBuilder, ConversationMode
+    from ..synthesis.conversation_builder import ConversationMode
     from ..synthesis.pipeline import SynthesisPipeline
 
     console.print(Panel.fit("🧠 Synthesis Pipeline", style="bold magenta"))
@@ -225,6 +229,7 @@ def synthesize(
         enable_judge=judge,
         judge_model=judge_model,
         max_tokens=max_tokens,
+        conversation_mode=mode,  # type: ignore[arg-type]
     )
     pipeline = SynthesisPipeline(
         config=config,
@@ -233,8 +238,13 @@ def synthesize(
         use_cache=not no_cache,
     )
 
-    # Use custom conversation mode if specified
-    use_conversation_builder = mode != "default"
+    # All modes (including default) route through the pipeline, which applies
+    # mode routing + scaffold + prune + judge with cache/checkpoint support.
+    try:
+        ConversationMode(mode)
+    except ValueError:
+        console.print(f"[red]Error: Unknown mode: {mode}[/red]")
+        raise typer.Exit(1) from None
 
     async def run_synthesis():
         with Progress(
@@ -247,13 +257,7 @@ def synthesize(
             def update_progress(current, total):
                 progress.update(task, completed=current)
 
-            if use_conversation_builder:
-                builder = ConversationBuilder()
-                client = pipeline._get_client()
-                mode_enum = ConversationMode(mode)
-                conversations = await builder.build_batch(chunks, mode_enum, client, max_concurrency=concurrency)  # type: ignore[arg-type]
-            else:
-                conversations = await pipeline.synthesize_batch(chunks, update_progress, job_id=job_id, resume=resume)
+            conversations = await pipeline.synthesize_batch(chunks, update_progress, job_id=job_id, resume=resume)
             return conversations
 
     try:
@@ -302,7 +306,7 @@ def export(
     input: str = typer.Argument(..., help="Input conversations JSON file"),
     formats: str = typer.Option("sharegpt", "--format", "-f", help="Export formats (comma-separated)"),
     output_dir: str = typer.Option("./output", "--output-dir", "-o", help="Output directory"),
-    model_name: str = typer.Option("unsloth/Meta-Llama-3.1-8B-Instruct", "--model", help="Unsloth model name"),
+    model_name: str = typer.Option("Qwen/Qwen3-8B", "--model", help="Unsloth model name"),
     no_unsloth: bool = typer.Option(False, "--no-unsloth", flag_value=True, help="Skip Unsloth script generation"),
     split: bool = typer.Option(False, "--split", flag_value=True, help="Split into train/val/test"),
     card: bool = typer.Option(False, "--card", flag_value=True, help="Generate dataset card"),
@@ -392,6 +396,74 @@ def validate(
 
     if not report.is_valid:
         raise typer.Exit(1)
+
+
+@app.command()
+def evaluate(
+    input: str = typer.Argument(..., help="Input conversations JSON file"),
+    threshold: float = typer.Option(0.5, "--threshold", help="Min mean confidence (0-1)"),
+    min_valid_rate: float = typer.Option(0.8, "--min-valid-rate", help="Min valid-turn rate (0-1)"),
+    reference: str | None = typer.Option(
+        None, "--reference", help="Optional eval-set text file for contamination check"
+    ),
+    output: str | None = typer.Option(None, "--output", "-o", help="Save report to file"),
+):
+    """Evaluate dataset quality (heuristics + stored judge scores, no LLM calls)."""
+    from ..core.schemas import ConversationSchema
+    from ..synthesis.eval import EvalThresholds, evaluate_conversations
+
+    console.print(Panel.fit("📊 Dataset Evaluation", style="bold magenta"))
+
+    from ..core.json_utils import safe_json_load
+
+    input_path = Path(input)
+    if not input_path.exists():
+        console.print(f"[red]Error: Input file does not exist: {input}[/red]")
+        raise typer.Exit(1)
+
+    conv_data = safe_json_load(input_path)
+    conversations = [ConversationSchema(**conv) for conv in conv_data]
+
+    refs: list[str] | None = None
+    if reference:
+        ref_path = Path(reference)
+        if ref_path.exists():
+            refs = [ref_path.read_text(encoding="utf-8")]
+
+    report = evaluate_conversations(
+        conversations,
+        reference_texts=refs,
+        thresholds=EvalThresholds(min_mean_confidence=threshold, min_valid_rate=min_valid_rate),
+    )
+    console.print(report.summary())
+
+    if output:
+        out = Path(output)
+        out.write_text(report.summary(), encoding="utf-8")
+        console.print(f"\n[green]Report saved to {out}[/green]")
+
+    if not report.passed:
+        raise typer.Exit(1)
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind host"),
+    port: int = typer.Option(8000, "--port", help="Bind port"),
+):
+    """Serve the Distill-Align REST API (requires the serve extra)."""
+    try:
+        from ..serve import create_app
+    except ImportError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1) from e
+    try:
+        import uvicorn  # type: ignore[import-not-found]
+    except ImportError as e:
+        console.print("[red]uvicorn is not installed. Install with: pip install distill-align[serve][/red]")
+        raise typer.Exit(1) from e
+    console.print(Panel.fit(f"🚀 Serving Distill-Align on http://{host}:{port}", style="bold green"))
+    uvicorn.run(create_app(), host=host, port=port)
 
 
 @app.command()

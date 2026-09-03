@@ -104,13 +104,16 @@ def clear_custom() -> None:
 
 
 def register_builtins() -> None:
-    """Register the six built-in providers shipped with Distill-Align.
+    """Register the built-in providers shipped with Distill-Align.
 
-    Safe to call multiple times — idempotent.
+    Per-provider ``default_model`` values track :mod:`catalog.PROVIDER_DEFAULTS`
+    (Sep-2026 production defaults). Safe to call multiple times — idempotent.
     """
     # Avoid double-registration
     if "openai" in _registry:
         return
+
+    from .catalog import PROVIDER_DEFAULTS
 
     register(
         ProviderInfo(
@@ -119,7 +122,7 @@ def register_builtins() -> None:
             api_format="openai",
             env_vars=["OPENAI_API_KEY", "DISTILL_LLM_API_KEY"],
             default_base_url="https://api.openai.com/v1",
-            default_model="gpt-4o",
+            default_model=PROVIDER_DEFAULTS["openai"],
             concurrency_limit=10,
             rpm_limit=60,
         ),
@@ -133,7 +136,7 @@ def register_builtins() -> None:
             api_format="anthropic",
             env_vars=["ANTHROPIC_API_KEY"],
             default_base_url="https://api.anthropic.com/v1",
-            default_model="claude-sonnet-4-20250514",
+            default_model=PROVIDER_DEFAULTS["anthropic"],
             concurrency_limit=10,
             rpm_limit=50,
         ),
@@ -147,7 +150,7 @@ def register_builtins() -> None:
             api_format="gemini",
             env_vars=["GOOGLE_API_KEY", "GEMINI_API_KEY"],
             default_base_url="https://generativelanguage.googleapis.com/v1beta",
-            default_model="gemini-2.0-flash",
+            default_model=PROVIDER_DEFAULTS["gemini"],
             concurrency_limit=15,
             rpm_limit=120,
         ),
@@ -160,7 +163,7 @@ def register_builtins() -> None:
             api_format="openai",
             env_vars=["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT"],
             default_base_url="https://api.openai.azure.com",
-            default_model="gpt-4o",
+            default_model=PROVIDER_DEFAULTS["azure"],
             concurrency_limit=10,
             rpm_limit=60,
         ),
@@ -173,7 +176,7 @@ def register_builtins() -> None:
             api_format="ollama",
             env_vars=[],
             default_base_url="http://localhost:11434",
-            default_model="llama3.2",
+            default_model=PROVIDER_DEFAULTS["ollama"],
             requires_api_key=False,
             concurrency_limit=8,
             rpm_limit=999,
@@ -187,12 +190,70 @@ def register_builtins() -> None:
             api_format="vllm",
             env_vars=[],
             default_base_url="http://localhost:8000/v1",
-            default_model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+            default_model=PROVIDER_DEFAULTS["vllm"],
             requires_api_key=False,
             concurrency_limit=16,
             rpm_limit=999,
         ),
     )
+
+    register(
+        ProviderInfo(
+            name="qwen",
+            label="Alibaba Qwen (DashScope)",
+            api_format="openai",
+            env_vars=["DASHSCOPE_API_KEY", "QWEN_API_KEY", "DISTILL_LLM_API_KEY"],
+            default_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            default_model=PROVIDER_DEFAULTS["qwen"],
+            concurrency_limit=10,
+            rpm_limit=120,
+        ),
+    )
+
+    # ── 2026 gateway / hosted open-weight providers (all OpenAI-compatible) ──
+    gateways = [
+        (
+            "openrouter",
+            "OpenRouter (gateway)",
+            ["OPENROUTER_API_KEY", "DISTILL_LLM_API_KEY"],
+            "https://openrouter.ai/api/v1",
+            10,
+            120,
+        ),
+        ("litellm", "LiteLLM Proxy", ["LITELLM_API_KEY", "DISTILL_LLM_API_KEY"], "http://localhost:4000/v1", 12, 300),
+        (
+            "together",
+            "Together AI",
+            ["TOGETHER_API_KEY", "DISTILL_LLM_API_KEY"],
+            "https://api.together.xyz/v1",
+            10,
+            120,
+        ),
+        ("groq", "Groq", ["GROQ_API_KEY", "DISTILL_LLM_API_KEY"], "https://api.groq.com/openai/v1", 10, 120),
+        ("mistral", "Mistral AI", ["MISTRAL_API_KEY", "DISTILL_LLM_API_KEY"], "https://api.mistral.ai/v1", 10, 120),
+        ("deepseek", "DeepSeek", ["DEEPSEEK_API_KEY", "DISTILL_LLM_API_KEY"], "https://api.deepseek.com/v1", 10, 120),
+        (
+            "cohere",
+            "Cohere",
+            ["COHERE_API_KEY", "DISTILL_LLM_API_KEY"],
+            "https://api.cohere.ai/compatibility/v1",
+            10,
+            120,
+        ),
+    ]
+    for name, label, env_vars, base_url, conc, rpm in gateways:
+        register(
+            ProviderInfo(
+                name=name,
+                label=label,
+                api_format="openai",
+                env_vars=env_vars,
+                default_base_url=base_url,
+                default_model=PROVIDER_DEFAULTS[name],
+                concurrency_limit=conc,
+                rpm_limit=rpm,
+            ),
+        )
 
 
 # ── Import-time initialisation ──────────────────────────────────────────────

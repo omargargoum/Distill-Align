@@ -157,6 +157,15 @@ class PIIScanner:
     # Stripe API keys (live/test)
     STRIPE_KEY: ClassVar[re.Pattern] = re.compile(r"\b(?:sk|pk)_(?:live|test)_[a-zA-Z0-9]{24,}\b")
 
+    # Anthropic API keys
+    ANTHROPIC_KEY: ClassVar[re.Pattern] = re.compile(r"\bsk-ant-[a-zA-Z0-9\-_]{32,}\b")
+
+    # OpenAI API keys (sk-..., sk-proj-...)
+    OPENAI_KEY: ClassVar[re.Pattern] = re.compile(r"\bsk-(?:proj-)?[a-zA-Z0-9\-_]{20,}\b")
+
+    # OpenRouter / Together / generic provider keys
+    OPENROUTER_KEY: ClassVar[re.Pattern] = re.compile(r"\bsk-or-[a-zA-Z0-9\-_]{16,}\b")
+
     # Generic API key / bearer token
     BEARER_TOKEN: ClassVar[re.Pattern] = re.compile(
         r"(?i)(?:(?:bearer|token|apikey|api_key|api-key|secret)[:\s=]+)[a-zA-Z0-9_\-\.]{16,64}"
@@ -201,6 +210,9 @@ class PIIScanner:
         ("hf_token", HF_TOKEN, "secret", "critical", "Hugging Face token"),
         ("slack_token", SLACK_TOKEN, "secret", "critical", "Slack token"),
         ("stripe_key", STRIPE_KEY, "secret", "critical", "Stripe API key"),
+        ("anthropic_key", ANTHROPIC_KEY, "secret", "critical", "Anthropic API key"),
+        ("openai_key", OPENAI_KEY, "secret", "critical", "OpenAI API key"),
+        ("openrouter_key", OPENROUTER_KEY, "secret", "critical", "OpenRouter API key"),
         ("bearer_token", BEARER_TOKEN, "secret", "high", "Bearer token / API key"),
         ("jwt_token", JWT_TOKEN, "secret", "high", "JWT token"),
         ("ssh_private_key", SSH_PRIVATE_KEY, "secret", "critical", "SSH private key"),
@@ -235,6 +247,10 @@ class PIIFilter:
         enable_secrets: Scan for secret/token patterns (default: True).
         redact: Whether to redact findings in output (default: True).
         redact_placeholder: Template for redacted text (default: ``[REDACTED: {type}]``).
+        validate_credit_cards: Run Luhn checksum on credit-card candidates
+            to cut false positives (default: True).
+        use_presidio: If True and ``presidio_analyzer`` is installed, run it
+            as an additional NER pass (default: False — regex only, no new dep).
     """
 
     PATTERNS: ClassVar[list[tuple[str, re.Pattern, str, str, str]]] = PIIScanner.PATTERNS
@@ -246,11 +262,15 @@ class PIIFilter:
         enable_secrets: bool = True,
         redact: bool = True,
         redact_placeholder: str = "[REDACTED: {type}]",
+        validate_credit_cards: bool = True,
+        use_presidio: bool = False,
     ):
         self.enable_pii = enable_pii
         self.enable_secrets = enable_secrets
         self.redact = redact
         self.redact_placeholder = redact_placeholder
+        self.validate_credit_cards = validate_credit_cards
+        self.use_presidio = use_presidio
 
     def scan_text(self, text: str) -> PIIFilterResult:
         """
@@ -290,6 +310,10 @@ class PIIFilter:
                 if self._is_false_positive(text, start, end):
                     continue
 
+                # Luhn-validate credit cards to cut false positives
+                if pattern_type == "credit_card" and self.validate_credit_cards and not _luhn_valid(match.group()):
+                    continue
+
                 # Avoid overlapping matches (keep the first/longest)
                 if self._overlaps(seen_ranges, start, end):
                     continue
@@ -310,6 +334,10 @@ class PIIFilter:
 
         # Sort by position
         findings.sort(key=lambda f: f.start)
+
+        # Optional Presidio NER pass (additive; never removes regex findings)
+        if self.use_presidio:
+            findings = self._merge_presidio_findings(text, findings, seen_ranges)
 
         # Redact if requested
         redacted_text = self._redact_findings(text, findings) if self.redact else text
@@ -380,3 +408,61 @@ class PIIFilter:
             chars[f.start : f.end] = replacement
 
         return "".join(chars)
+
+    def _merge_presidio_findings(
+        self,
+        text: str,
+        findings: list[PIIFinding],
+        seen_ranges: set[tuple[int, int]],
+    ) -> list[PIIFinding]:
+        """Optionally enrich findings with Presidio NER (graceful fallback)."""
+        try:
+            from presidio_analyzer import AnalyzerEngine  # type: ignore[import-not-found]
+        except ImportError:
+            logger.debug("Presidio not installed; skipping NER pass (pip install distill-align[pii])")
+            return findings
+        try:
+            engine: object = AnalyzerEngine()
+            results: list[object] = engine.analyze(text=text, language="en")  # type: ignore[attr-defined]
+        except Exception as e:
+            logger.warning(f"Presidio pass failed, keeping regex findings: {e}")
+            return findings
+        merged = list(findings)
+        for r in results:
+            start = int(getattr(r, "start", -1))
+            end = int(getattr(r, "end", -1))
+            if start < 0 or end <= start:
+                continue
+            if self._overlaps(seen_ranges, start, end):
+                continue
+            seen_ranges.add((start, end))
+            entity = str(getattr(r, "entity_type", "PII"))
+            merged.append(
+                PIIFinding(
+                    type=f"presidio_{entity.lower()}",
+                    value=text[start:end],
+                    start=start,
+                    end=end,
+                    severity="medium",
+                    category="pii",
+                    description=f"Presidio NER: {entity}",
+                )
+            )
+        merged.sort(key=lambda f: f.start)
+        return merged
+
+
+def _luhn_valid(number: str) -> bool:
+    """Validate a credit-card candidate with the Luhn checksum."""
+    digits = [int(d) for d in number if d.isdigit()]
+    if len(digits) < 13:
+        return False
+    checksum = 0
+    parity = len(digits) % 2
+    for i, d in enumerate(digits):
+        if i % 2 == parity:
+            d *= 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0

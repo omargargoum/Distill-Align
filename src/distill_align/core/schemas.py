@@ -150,13 +150,21 @@ class IngestionConfig(BaseModel):
     include_metadata: bool = True
     scan_pii: bool = False  # Enable PII/secret scanning during ingestion
     redact_pii: bool = True  # Redact findings when scan_pii is enabled
+    # Phase 2: chunker selection + semantic options (additive, default = legacy)
+    chunker: Literal["auto", "markdown", "code", "recursive", "semantic", "parent_child", "late"] = "auto"
+    semantic_breakpoint: Literal["percentile", "gradient", "fixed"] = "percentile"
+    semantic_threshold: float = Field(default=75.0, ge=0.0, le=100.0)
+    parent_child_ratio: int = Field(default=4, ge=2, le=16)
+    contextual_prefix: bool = False  # Prepend heading path to each chunk
+    serialize_tables: Literal["markdown", "sentences", "both"] = "both"
+    enable_embeddings: bool = False  # Populate DataChunk.embedding via EmbeddingsClient
 
 
 class SynthesisConfig(BaseModel):
     """Configuration for the synthesis pipeline."""
 
     llm_provider: str = "openai"
-    model_name: str = "gpt-4o"
+    model_name: str = "gpt-5-mini"
     base_url: str | None = None
     api_key: str | None = None
     max_concurrency: int = Field(default=5, ge=1)
@@ -168,17 +176,46 @@ class SynthesisConfig(BaseModel):
     scaffold_enabled: bool = True
     enable_judge: bool = False  # LLM-as-judge evaluation of generated conversations
     judge_model: str | None = None  # Override model for judge (defaults to model_name)
+    # Phase 3: conversation mode routing (default = legacy socratic path)
+    conversation_mode: Literal[
+        "default",
+        "teach",
+        "debug",
+        "review",
+        "qa",
+        "explain",
+        "evol_instruct",
+        "rag_qa",
+        "tool_call",
+        "constitutional",
+        "distill",
+    ] = "default"
 
 
 class ExportConfig(BaseModel):
     """Configuration for the export pipeline."""
 
-    formats: list[Literal["sharegpt", "alpaca", "chatml", "conversation", "hf_messages", "jsonl", "parquet"]] = Field(
-        default=["sharegpt"]
-    )
+    formats: list[
+        Literal[
+            "sharegpt",
+            "alpaca",
+            "chatml",
+            "conversation",
+            "hf_messages",
+            "jsonl",
+            "parquet",
+            "preference",
+            "dpo",
+            "orpo",
+            "kto",
+            "grpo",
+            "agent",
+            "rag_qa",
+        ]
+    ] = Field(default=["sharegpt"])
     output_dir: str = "./output"
     generate_unsloth_script: bool = True
-    unsloth_model: str = "unsloth/Meta-Llama-3.1-8B-Instruct"
+    unsloth_model: str = "Qwen/Qwen3-8B"
     unsloth_max_seq_length: int = 2048
     unsloth_lora_rank: int = 16
     unsloth_lora_alpha: int = 16

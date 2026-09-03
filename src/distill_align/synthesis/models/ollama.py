@@ -87,7 +87,18 @@ class OllamaClient(BaseLLMClient):
             "options": options,
         }
         if response_format:
-            payload["format"] = "json"
+            # Ollama ≥0.3: `format` accepts a full JSON Schema for
+            # XGrammar-constrained decoding. Accept strict wrappers and
+            # legacy {"type": "json_object"} (→ "json").
+            schema = None
+            try:
+                schema = response_format.get("json_schema", {}).get("schema")
+            except AttributeError:
+                schema = None
+            if isinstance(schema, dict):
+                payload["format"] = schema
+            else:
+                payload["format"] = "json"
         payload.update(kwargs)
 
         try:

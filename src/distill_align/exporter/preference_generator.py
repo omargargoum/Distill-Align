@@ -232,3 +232,26 @@ class PreferenceGenerator:
             }
             for p in pairs
         ]
+
+    def to_kto_format(self, pairs: list[PreferencePair]) -> list[dict[str, Any]]:
+        """Expand pairs into unpaired KTO rows (one per completion + label)."""
+        rows: list[dict[str, Any]] = []
+        for p in pairs:
+            rows.append({"prompt": p.prompt, "completion": p.chosen, "label": True})
+            rows.append({"prompt": p.prompt, "completion": p.rejected, "label": False})
+        return rows
+
+    def to_orpo_format(self, pairs: list[PreferencePair]) -> list[dict[str, Any]]:
+        """ORPO rows: single-stage SFT+preference (same as DPO triples)."""
+        return [{"prompt": p.prompt, "chosen": p.chosen, "rejected": p.rejected} for p in pairs]
+
+    def to_grpo_format(self, pairs: list[PreferencePair]) -> list[dict[str, Any]]:
+        """GRPO groups: prompt + completions + scalar rewards."""
+        return [
+            {
+                "prompt": p.prompt,
+                "completions": [p.chosen, p.rejected],
+                "rewards": [round(p.chosen_score, 4), round(p.rejected_score, 4)],
+            }
+            for p in pairs
+        ]

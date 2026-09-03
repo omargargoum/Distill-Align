@@ -68,7 +68,7 @@ class SynthesisFileConfig(BaseModel):
     """Synthesis configuration from file."""
 
     provider: str = "openai"
-    model: str = "gpt-4o"
+    model: str = "gpt-5-mini"
     base_url: str | None = None
     api_key: str | None = None
     max_concurrency: int = 5
@@ -82,7 +82,7 @@ class SynthesisFileConfig(BaseModel):
 class UnslothFileConfig(BaseModel):
     """Unsloth configuration from file."""
 
-    model: str = "unsloth/Meta-Llama-3.1-8B-Instruct"
+    model: str = "Qwen/Qwen3-8B"
     max_seq_length: int = 2048
     lora_rank: int = 16
     lora_alpha: int = 16
@@ -137,8 +137,8 @@ ingestion:
       recursive: true
 
 synthesis:
-  provider: openai        # openai, ollama, vllm
-  model: gpt-4o
+  provider: openai        # openai, anthropic, gemini, azure, ollama, vllm, qwen, openrouter, deepseek, mistral
+  model: gpt-5-mini       # e.g. gpt-5.6-terra, claude-sonnet-5, gemini-3.5-flash, qwen3-max, deepseek-v4-flash
   # base_url: http://localhost:11434  # For Ollama/vLLM
   # api_key: sk-...                    # Or set OPENAI_API_KEY env var
   max_concurrency: 5
@@ -158,7 +158,7 @@ export:
   val_split: 0.05
   test_split: 0.05
   unsloth:
-    model: unsloth/Meta-Llama-3.1-8B-Instruct
+    model: Qwen/Qwen3-8B
     max_seq_length: 2048
     lora_rank: 16
     lora_alpha: 16

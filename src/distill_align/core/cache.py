@@ -143,6 +143,60 @@ class CacheManager:
         hash_input = f"{content}|{model}|{prompt_id}"
         return hashlib.sha256(hash_input.encode()).hexdigest()
 
+    @staticmethod
+    def make_canonical_key(
+        content: str,
+        model: str = "",
+        prompt_id: str = "",
+        temperature: float | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> str:
+        """Generate a canonical cache key immune to ``str(dict)`` ordering.
+
+        Unlike :meth:`make_key`, payloads are serialised with sorted keys so
+        identical items hash identically regardless of dict insertion order.
+        Versioned (``v2:`` prefix) so v1 and v2 keys never collide.
+
+        Args:
+            content: Input content (chunk text or canonical JSON payload).
+            model: Model name.
+            prompt_id: Prompt template id (e.g. ``socratic:v2``).
+            temperature: Optional sampling temperature (part of the key).
+            extra: Optional extra params (sorted before hashing).
+
+        Returns:
+            Hex digest cache key.
+        """
+        payload = {
+            "content": content,
+            "model": model,
+            "prompt_id": prompt_id,
+            "temperature": temperature,
+            "extra": extra or {},
+        }
+        canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+        return hashlib.sha256(f"v2:{canonical}".encode()).hexdigest()
+
+    @staticmethod
+    def make_key_for_item(
+        item: dict[str, Any],
+        model: str = "",
+        prompt_id: str = "",
+        temperature: float | None = None,
+    ) -> str:
+        """Build a canonical key for a worker item dict.
+
+        Serialises with sorted keys instead of ``str(item)`` so key order
+        and Python repr details cannot cause false cache misses.
+        """
+        try:
+            content = json.dumps(item, sort_keys=True, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            content = str(item)
+        return CacheManager.make_canonical_key(
+            content=content, model=model, prompt_id=prompt_id, temperature=temperature
+        )
+
     def get(self, key: str) -> dict[str, Any] | None:
         """
         Retrieve a cached result.

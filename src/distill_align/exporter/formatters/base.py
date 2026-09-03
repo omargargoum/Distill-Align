@@ -76,6 +76,30 @@ class BaseFormatter(ABC):
         """
         return self.format(list(conversations), filename)
 
+    def load(self, file_path: str | Path) -> Any:
+        """Load a previously exported file (JSON array or JSONL).
+
+        Shared default so every formatter supports
+        ``ExportPipeline.validate_export``; formats with special encodings
+        (Parquet) override this.
+        """
+        import json
+
+        path = Path(file_path)
+        text = path.read_text(encoding="utf-8").strip()
+        if not text:
+            return []
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # JSONL fallback: one object per line
+            rows = []
+            for line in text.splitlines():
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+            return rows
+
     def _ensure_json_extension(self, filename: str) -> str:
         """
         Ensure filename has .json extension.

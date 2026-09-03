@@ -479,7 +479,7 @@ async def test_gemini_chat_success(httpx_mock: HTTPXMock) -> None:
     client = GeminiClient(api_key="test-key")
     httpx_mock.add_response(
         method="POST",
-        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=test-key",
+        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=test-key",
         json={
             "candidates": [
                 {
@@ -487,7 +487,7 @@ async def test_gemini_chat_success(httpx_mock: HTTPXMock) -> None:
                     "finishReason": "STOP",
                 }
             ],
-            "modelVersion": "gemini-2.0-flash",
+            "modelVersion": "gemini-3.5-flash",
             "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15},
         },
     )
@@ -510,7 +510,7 @@ async def test_gemini_with_system_instruction(httpx_mock: HTTPXMock) -> None:
     client = GeminiClient(api_key="test-key")
     httpx_mock.add_response(
         method="POST",
-        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=test-key",
+        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=test-key",
         json={
             "candidates": [
                 {
@@ -518,7 +518,7 @@ async def test_gemini_with_system_instruction(httpx_mock: HTTPXMock) -> None:
                     "finishReason": "STOP",
                 }
             ],
-            "modelVersion": "gemini-2.0-flash",
+            "modelVersion": "gemini-3.5-flash",
             "usageMetadata": {},
         },
     )
@@ -545,7 +545,7 @@ async def test_gemini_structured_output(httpx_mock: HTTPXMock) -> None:
     client = GeminiClient(api_key="test-key")
     httpx_mock.add_response(
         method="POST",
-        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=test-key",
+        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=test-key",
         json={
             "candidates": [
                 {
@@ -553,7 +553,7 @@ async def test_gemini_structured_output(httpx_mock: HTTPXMock) -> None:
                     "finishReason": "STOP",
                 }
             ],
-            "modelVersion": "gemini-2.0-flash",
+            "modelVersion": "gemini-3.5-flash",
             "usageMetadata": {},
         },
     )

@@ -19,7 +19,7 @@ With optional extras:
 
 ```bash
 pip install distill-align[parquet]   # Apache Parquet export support
-pip install distill-align[hub]       # HuggingFace Hub integration
+pip install distill-align[hub]       # HuggingFace Hub integration`n`npip install distill-align[eval]      # Eval harness (DeepEval + RAGAS)`n`npip install distill-align[serve]     # REST API server`n`npip install distill-align[gateway]   # LiteLLM routing
 pip install distill-align[all]       # All optional dependencies
 ```
 
@@ -90,7 +90,7 @@ ingestion:
 
 synthesis:
   provider: openai
-  model: gpt-4o
+  model: gpt-5-mini
   max_concurrency: 5
 
 export:
@@ -135,14 +135,14 @@ distill-align ingest --source ./docs --output chunks.json --chunk-size 2000 --ov
 distill-align synthesize \
     --input chunks.json \
     --provider openai \
-    --model gpt-4o \
+    --model gpt-5-mini \
     --output conversations.json
 
 # With Ollama (local, no API key)
 distill-align synthesize \
     --input chunks.json \
     --provider ollama \
-    --model llama3.1 \
+    --model qwen3:30b \
     --base-url http://localhost:11434 \
     --output conversations.json
 
@@ -150,7 +150,7 @@ distill-align synthesize \
 distill-align synthesize \
     --input chunks.json \
     --provider anthropic \
-    --model claude-sonnet-4-20250514 \
+    --model claude-sonnet-5 \
     --output conversations.json
 ```
 
@@ -162,8 +162,8 @@ distill-align synthesize \
     ```bash
     distill-align synthesize \
         --input chunks.json \
-        --provider openai --model gpt-4o \
-        --judge --judge-model gpt-4o-mini \
+        --provider openai --model gpt-5-mini \
+        --judge --judge-model gpt-5-nano \
         --output conversations.json
     ```
 
@@ -262,6 +262,9 @@ Features:
 - 💾 Cache inspector (view, prune, clear)
 - 🔧 Configuration viewer
 - 📝 Live logs
+- 🧠 All 10 synthesis modes, 14 providers, 14 export formats, 7 chunkers
+- 📊 Evaluate quality gate (PASS/FAIL with thresholds, no LLM calls)
+- Press `m` for expert options (chunker, concurrency, judge, dataset card)
 
 ## Programmatic Usage
 
@@ -269,9 +272,10 @@ Use Distill-Align as a Python library:
 
 ```python
 import asyncio
+from distill_align.core.schemas import SynthesisConfig
+from distill_align.exporter.pipeline import ExportPipeline
 from distill_align.ingestion.auto import AutoIngestionPipeline
 from distill_align.synthesis.pipeline import SynthesisPipeline
-from distill_align.exporter.pipeline import ExportPipeline
 
 
 async def main():
@@ -281,7 +285,7 @@ async def main():
     print(f"Ingested {len(chunks)} chunks")
 
     # Synthesize
-    synth = SynthesisPipeline(provider="openai", model="gpt-4o")
+    synth = SynthesisPipeline(SynthesisConfig(llm_provider="openai", model_name="gpt-5-mini"))
     conversations = await synth.synthesize_batch(chunks)
     print(f"Generated {len(conversations)} conversations")
 

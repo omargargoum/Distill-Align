@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     max_chunk_tokens: int = Field(default=4000, ge=1)
 
     # Synthesis
-    llm_provider: str = "openai"  # openai, ollama, vllm
-    llm_model: str = "gpt-4o"
+    llm_provider: str = "openai"  # openai, anthropic, gemini, azure, ollama, vllm, qwen, openrouter, ...
+    llm_model: str = "gpt-5-mini"
     llm_base_url: str | None = None
     llm_api_key: str | None = None
     llm_max_concurrency: int = Field(default=5, ge=1)
@@ -38,12 +38,22 @@ class Settings(BaseSettings):
     scaffold_enabled: bool = True
     enable_judge: bool = False
     judge_model: str | None = None
+    # Judge v2 (additive; Phase 4 wires the new rubrics)
+    judge_rubrics: str = "relevance,coherence,correctness,completeness,safety"
+    judge_dual: bool = False  # cheap gate + frontier audit
+    judge_audit_model: str | None = None
+    # Embeddings (Phase 2 semantic chunking / dedup)
+    embedding_model: str = "text-embedding-3-small"
+    embedding_base_url: str | None = None
+    # Observability (Phase 6 tracing hooks)
+    enable_tracing: bool = False
+    tracing_endpoint: str | None = None
 
     # Export
     export_formats: str = "sharegpt"  # comma-separated: sharegpt,alpaca,chatml,conversation,hf_messages,jsonl,parquet
     export_output_dir: str = "./output"
     generate_unsloth_script: bool = True
-    unsloth_model: str = "unsloth/Meta-Llama-3.1-8B-Instruct"
+    unsloth_model: str = "Qwen/Qwen3-8B"
     unsloth_max_seq_length: int = 2048
     unsloth_lora_rank: int = 16
     unsloth_lora_alpha: int = 16

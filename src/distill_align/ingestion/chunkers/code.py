@@ -13,7 +13,7 @@ from .base import BaseChunker
 class CodeChunker(BaseChunker):
     """Chunker for source code with definition-aware splitting."""
 
-    # Patterns for common code structures
+    # Patterns for common code structures (tree-sitter-lite: regex per lang)
     DEFINITION_PATTERNS = {
         "python": [
             re.compile(r"^(class\s+\w+.*?:)", re.MULTILINE),
@@ -26,12 +26,45 @@ class CodeChunker(BaseChunker):
         ],
         "typescript": [
             re.compile(r"^(class\s+\w+.*?{)", re.MULTILINE),
-            re.compile(r"^(function\s+\w+.*?{)", re.MULTILINE),
+            re.compile(r"^(?:export\s+)?(?:async\s+)?function\s+\w+.*?{", re.MULTILINE),
+            re.compile(r"^(?:export\s+)?(?:interface|type|enum)\s+\w+", re.MULTILINE),
             re.compile(r"^(const\s+\w+\s*=\s*(?:async\s+)?\(.*?\)\s*=>\s*{)", re.MULTILINE),
         ],
         "java": [
             re.compile(r"^(class\s+\w+.*?{)", re.MULTILINE),
             re.compile(r"^(public|private|protected)?\s*(?:static\s+)?(?:\w+\s+)+\w+\s*\(.*?\)\s*{", re.MULTILINE),
+        ],
+        "go": [
+            re.compile(r"^(?:func\s+(?:\(\w+\s+[\w*]+\)\s+)?\w+\s*\(.*?\).*?{)", re.MULTILINE),
+            re.compile(r"^(?:type\s+\w+\s+(?:struct|interface).*?{)", re.MULTILINE),
+        ],
+        "rust": [
+            re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+\w+.*?{", re.MULTILINE),
+            re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|impl|trait)\s+\w+", re.MULTILINE),
+        ],
+        "c": [
+            re.compile(r"^\w[\w\s*]+\w\s*\(.*?\)\s*{", re.MULTILINE),
+        ],
+        "cpp": [
+            re.compile(r"^(?:class|struct)\s+\w+.*?{", re.MULTILINE),
+            re.compile(r"^\w[\w\s:*&<>]+\w\s*\(.*?\)\s*(?:const\s*)?{", re.MULTILINE),
+        ],
+        "csharp": [
+            re.compile(
+                r"^(?:public|private|protected|internal)?\s*(?:static\s+)?(?:class|interface|struct|enum)\s+\w+",
+                re.MULTILINE,
+            ),
+            re.compile(
+                r"^(?:public|private|protected|internal)?\s*(?:static\s+)?(?:\w+\s+)+\w+\s*\(.*?\)\s*{", re.MULTILINE
+            ),
+        ],
+        "php": [
+            re.compile(r"^(?:class|interface|trait)\s+\w+", re.MULTILINE),
+            re.compile(r"^(?:public|private|protected)?\s*(?:static\s+)?function\s+\w+\s*\(.*?\)\s*{", re.MULTILINE),
+        ],
+        "ruby": [
+            re.compile(r"^(?:class|module)\s+\w+", re.MULTILINE),
+            re.compile(r"^\s*def\s+\w+", re.MULTILINE),
         ],
     }
 
@@ -175,7 +208,15 @@ class CodeChunker(BaseChunker):
             if match:
                 return match.group(1)
         elif language in ("javascript", "typescript"):
-            match = re.match(r"^(?:class|function|const)\s+(\w+)", code)
+            match = re.match(r"^(?:export\s+)?(?:class|function|const|interface|type|enum)\s+(\w+)", code)
+            if match:
+                return match.group(1)
+        else:
+            # Generic: first identifier after fn/func/def/function/class/struct
+            match = re.match(
+                r"^(?:.*?\b(?:fn|func|function|def|class|struct|interface|trait|enum|type)\b\s+)([A-Za-z_]\w*)",
+                code,
+            )
             if match:
                 return match.group(1)
 

@@ -394,7 +394,7 @@ class TestTokenizer:
         assert "$" in report
 
     def test_multi_provider_pricing(self):
-        """Verify pricing exists for key models."""
+        """Verify pricing exists for key models (legacy + Sep-2026 current)."""
         models_to_check = [
             "gpt-4o",
             "gpt-4o-mini",
@@ -408,11 +408,46 @@ class TestTokenizer:
             "o4-mini",
             "llama3.1",
             "deepseek-r1",
+            # Sep-2026 current generation
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5-mini",
+            "claude-fable-5",
+            "claude-opus-4-8",
+            "claude-sonnet-5",
+            "claude-haiku-4-5",
+            "gemini-3.5-flash",
+            "gemini-3.8-flash",
+            "qwen3-max",
+            "qwen3-coder-next",
+            "deepseek-v4-flash",
+            "mistral-large-latest",
+            "llama4:scout",
         ]
         for model in models_to_check:
             pricing = Tokenizer._resolve_pricing(model)
             assert "input" in pricing
             assert "output" in pricing
+
+    def test_sep2026_pricing_values(self):
+        """Spot-check official Sep-2026 prices used for cost reports."""
+        assert Tokenizer._resolve_pricing("gpt-5.6-sol") == {"input": 4.00, "output": 20.00}
+        assert Tokenizer._resolve_pricing("gpt-5.6-terra") == {"input": 2.00, "output": 12.00}
+        assert Tokenizer._resolve_pricing("claude-sonnet-5") == {"input": 2.00, "output": 10.00}
+        assert Tokenizer._resolve_pricing("claude-opus-4-8") == {"input": 5.00, "output": 25.00}
+        assert Tokenizer._resolve_pricing("claude-fable-5") == {"input": 10.00, "output": 50.00}
+        assert Tokenizer._resolve_pricing("claude-haiku-4-5") == {"input": 1.00, "output": 5.00}
+        assert Tokenizer._resolve_pricing("deepseek-v4-flash") == {"input": 0.14, "output": 0.28}
+
+    def test_catalog_aliases(self):
+        """Legacy ids resolve to their 2026 successors."""
+        from distill_align.synthesis.models.catalog import resolve_alias
+
+        assert resolve_alias("gpt-4o") == "gpt-5-mini"
+        assert resolve_alias("claude-sonnet-4-20250514") == "claude-sonnet-5"
+        assert resolve_alias("gemini-2.0-flash") == "gemini-3.5-flash"
+        assert resolve_alias("gpt-5-mini") == "gpt-5-mini"
 
     def test_reset_stats(self):
         tokenizer = Tokenizer(model="gpt-4o")
@@ -541,7 +576,7 @@ class TestPipelineCostStats:
 
         pipeline = SynthesisPipeline(use_cache=False)
         assert pipeline._tokenizer is not None
-        assert pipeline._tokenizer.model == "gpt-4o"  # default model
+        assert pipeline._tokenizer.model == "gpt-5-mini"  # default model
 
     def test_pipeline_exposes_cost_stats(self):
         """Pipeline should expose get_cost_stats()."""
@@ -559,7 +594,7 @@ class TestPipelineCostStats:
         pipeline = SynthesisPipeline(use_cache=False)
         report = pipeline.get_cost_report()
         assert "Cost Report" in report
-        assert "gpt-4o" in report
+        assert "gpt-5-mini" in report
 
     def test_pipeline_reset_cost_stats(self):
         """Pipeline should allow resetting cost stats."""

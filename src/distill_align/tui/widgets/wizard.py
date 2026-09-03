@@ -158,13 +158,20 @@ class QuickStartWizard(ModalScreen[dict[str, Any] | None]):
     def _render_step3(self) -> str:
         """Step 3: provider / model."""
         provider = self._result.get("provider", "openai")
-        model = self._result.get("model", "gpt-4o-mini")
+        model = self._result.get("model", "gpt-5-mini")
+
+        try:
+            from ...synthesis.models.registry import list_names
+
+            available = ", ".join(list_names())
+        except Exception:
+            available = "openai, anthropic, gemini, azure, ollama, vllm, qwen"
 
         return (
             f"[bold]Provider[/bold]: [green]{provider}[/green]\n"
             f"[bold]Model[/bold]:    [green]{model}[/green]\n\n"
-            f"[dim]Available providers: openai, ollama, vllm, anthropic, gemini, azure[/dim]\n\n"
-            "[dim italic]💡 Tip: Start with [bold]gpt-4o-mini[/bold] for fast, cheap results.[/dim italic]"
+            f"[dim]Available providers: {available}[/dim]\n\n"
+            "[dim italic]💡 Tip: Start with [bold]gpt-5-mini[/bold] for fast, cheap results.[/dim italic]"
         )
 
     @on(Button.Pressed, "#wizard-next")
@@ -201,7 +208,7 @@ def wizard_result_to_full_config(result: dict[str, Any]) -> dict[str, Any] | Non
         "source": "./data",
         "output_dir": "./output",
         "provider": "openai",
-        "model": "gpt-4o-mini",
+        "model": "gpt-5-mini",
     }
 
     # Merge from result

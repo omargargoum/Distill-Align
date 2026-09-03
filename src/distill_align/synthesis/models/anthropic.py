@@ -22,7 +22,7 @@ class AnthropicClient(BaseLLMClient):
         self,
         base_url: str = "https://api.anthropic.com/v1",
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-sonnet-5",
         timeout: float = 120.0,
         max_retries: int = 3,
         anthropic_version: str = "2023-06-01",
@@ -100,7 +100,23 @@ class AnthropicClient(BaseLLMClient):
         if system_content:
             payload["system"] = system_content
         if response_format:
-            payload["response_format"] = response_format
+            # GA structured outputs (Feb 2026): output_config.format with
+            # JSON Schema. Legacy json_object → prompt-level JSON mode.
+            schema = None
+            try:
+                schema = response_format.get("json_schema", {}).get("schema")
+            except AttributeError:
+                schema = None
+            if schema is not None:
+                payload["output_config"] = {"format": {"type": "json_schema", "json_schema": schema}}
+            elif response_format.get("type") == "json_object":
+                # Best-effort JSON mode: reinforce via system suffix.
+                if system_content:
+                    payload["system"] = system_content + "\nRespond with valid JSON only."
+                else:
+                    payload["system"] = "Respond with valid JSON only."
+            else:
+                payload["response_format"] = response_format
         payload.update(kwargs)
 
         try:

@@ -18,13 +18,13 @@
 
 ## الميزات
 
-- **استيراد ذكي**: أنابيب معالجة غير متزامنة مع تقسيم دلالي لمستندات Markdown و Code (يدعم أيضًا PDF و DOCX و HTML و CSV و JSON و Jupyter notebook وصفحات الويب).
-- **توليد عبر مزودات متعددة**: يدعم **OpenAI** و **Ollama** و **vLLM** و **Anthropic Claude** و **Google Gemini** و **Azure OpenAI** مع مجمّعات عمل غير متزامنة.
-- **محوّل سقراطي (Socratic Transformer)**: يحوّل الاستدلال الخام إلى حوارات سؤال وجواب متعددة الأدوار ومنظّمة.
+- **استيراد ذكي**: تقسيم دلالي وأبوي (parent-child) وسياقي متأخر (late-contextual) لمستندات Markdown و Code (يدعم أيضًا PDF و DOCX و HTML و CSV و JSON و Jupyter notebook وصفحات الويب، مع محلل Docling الاختياري).
+- **توليد عبر مزودات متعددة**: يدعم **OpenAI** و **Ollama** و **vLLM** و **Anthropic Claude** و **Google Gemini** و **Azure OpenAI** و **Qwen** وبوابات **OpenRouter و Together و Groq و Mistral و DeepSeek و Cohere** مع مخرجات هيكلية صارمة لكل مزود.
+- **محوّل سقراطي (Socratic Transformer)**: يحوّل الاستدلال الخام إلى حوارات سؤال وجواب متعددة الأدوار ومنظّمة، مع أنماط Evol-Instruct و RAG-QA و tool-call و Constitutional و distillation.
 - **مُهذّب Scaffold Action**: يزيل الحشو اللغوي لاستخراج المخرجات الهيكلية النقية.
-- **تقييم LLM كحَكَم (اختياري)**: تقييم آلي لجودة الحوارات المُنشأة باستخدام نموذج حَكَم منفصل، مع نتائج ثقة من 0 إلى 1.
-- **توليد تفضيلات DPO**: إنشاء أزواج تفضيل من الحوارات المُقيّمة لتدريب Direct Preference Optimization.
-- **صيغ تصدير متعددة**: ShareGPT، Alpaca، ChatML، HuggingFace messages (JSONL/JSON)، JSON Lines المتدفق، و **Apache Parquet**.
+- **تقييم LLM كحَكَم (اختياري)**: تقييم آلي على 7 معايير (منها faithfulness) مع حَكَم مزدوج وبوابة جودة `evaluate`، ونتائج ثقة من 0 إلى 1.
+- **توليد تفضيلات**: أزواج **DPO** وصفوف **KTO** و **ORPO** ومجموعات **GRPO** للتدريب التفضيلي والتعزيزي.
+- **صيغ تصدير متعددة**: ShareGPT، Alpaca، ChatML، HuggingFace messages (JSONL/JSON)، KTO، GRPO، agent، RAG-QA، JSON Lines المتدفق، و **Apache Parquet**.
 - **تصدير متدفق (Streaming)**: تصدير مجموعات بيانات كبيرة دون تحميلها بالكامل في الذاكرة باستخدام منتجات تكرارية.
 - **تتبّع التكاليف**: تقدير التكاليف أثناء الاستخدام عبر جميع المزودات مع محاسبة الرموز لكل طلب.
 - **تكامل مع Unsloth**: يولّد نصوص `train.py` مُحسّنة لضبط النماذج باستخدام Unsloth.
@@ -82,7 +82,7 @@ docker run --rm \
     --input /app/data/chunks.json \
     --output /app/output/conversations.json \
     --provider openai \
-    --model gpt-4o
+    --model gpt-5-mini
 ```
 
 ## الإعدادات
@@ -105,7 +105,7 @@ distill-align init
 
 ```bash
 export DISTILL_LLM_PROVIDER=openai
-export DISTILL_LLM_MODEL=gpt-4o
+export DISTILL_LLM_MODEL=gpt-5-mini
 export DISTILL_LLM_API_KEY=sk-...
 export DISTILL_LOG_LEVEL=INFO
 ```
@@ -132,9 +132,9 @@ distill-align synthesize \
     --input ./chunks.json \
     --output ./conversations.json \
     --provider openai \
-    --model gpt-4o \
+    --model gpt-5-mini \
     --judge \
-    --judge-model gpt-4o-mini
+    --judge-model gpt-5-nano
 
 # التصدير إلى صيغة التدريب
 distill-align export \

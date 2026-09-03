@@ -131,10 +131,10 @@ class BatchWorker:
         """
         item_id = item.get("id", "unknown")
 
-        # Check cache first
+        # Check cache first (canonical key — immune to dict ordering)
         if use_cache and self.cache is not None:
-            cache_key = CacheManager.make_key(
-                content=str(item),
+            cache_key = CacheManager.make_key_for_item(
+                item,
                 model=getattr(self.llm_client, "model", ""),
             )
             cached = self.cache.get(cache_key)

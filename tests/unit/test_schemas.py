@@ -177,7 +177,7 @@ class TestConfigSchemas:
     def test_synthesis_config_defaults(self):
         config = SynthesisConfig()
         assert config.llm_provider == "openai"
-        assert config.model_name == "gpt-4o"
+        assert config.model_name == "gpt-5-mini"
         assert config.max_concurrency == 5
 
     def test_export_config_defaults(self):

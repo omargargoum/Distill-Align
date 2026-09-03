@@ -76,18 +76,39 @@ class PreferenceFormatter(BaseFormatter):
                 prompt = user_turns[0].content
 
                 entry: dict[str, Any]
-                if self.format_type == "dpo":
+                if self.format_type in ("dpo", "orpo"):
                     if len(assistant_turns) >= 2:
-                        logger.warning(
-                            "DPO chosen/rejected assignment is order-based (first assistant turn = chosen, "
-                            "second = rejected). This may not reflect actual quality differences. "
-                            "Consider using a scoring mechanism for meaningful preference pairs."
-                        )
-                        entry = {
-                            "prompt": prompt,
-                            "chosen": assistant_turns[0].content,
-                            "rejected": assistant_turns[1].content,
-                        }
+                        # Score-aware ordering when judge scores exist:
+                        # higher-scored response becomes chosen.
+                        scored = []
+                        for t in assistant_turns:
+                            s = None
+                            if conv.judge_scores and isinstance(conv.judge_scores.get("overall"), (int, float)):
+                                s = float(conv.judge_scores["overall"])
+                            scored.append((s, t.content))
+                        if all(s is not None for s, _ in scored):
+                            scored.sort(key=lambda x: x[0], reverse=True)  # type: ignore[arg-type]
+                            entry = {
+                                "prompt": prompt,
+                                "chosen": scored[0][1],
+                                "rejected": scored[-1][1],
+                            }
+                        else:
+                            logger.warning(
+                                "DPO chosen/rejected assignment is order-based (first assistant turn = chosen, "
+                                "second = rejected). This may not reflect actual quality differences. "
+                                "Generate 2+ responses per prompt with --judge for score-aware pairs, "
+                                "or use PreferenceGenerator for scored pairing."
+                            )
+                            entry = {
+                                "prompt": prompt,
+                                "chosen": assistant_turns[0].content,
+                                "rejected": assistant_turns[1].content,
+                            }
+                        if self.format_type == "orpo":
+                            system = conv.get_system_prompt()
+                            if system:
+                                entry["system"] = system
                     else:
                         entry = {
                             "prompt": prompt,
@@ -133,7 +154,7 @@ class PreferenceFormatter(BaseFormatter):
                 return False
             if "prompt" not in item:
                 return False
-            if self.format_type == "dpo":
+            if self.format_type in ("dpo", "orpo"):
                 if "chosen" not in item or "rejected" not in item:
                     return False
             else:

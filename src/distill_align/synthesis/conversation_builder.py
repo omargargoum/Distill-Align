@@ -28,6 +28,12 @@ class ConversationMode(StrEnum):
     REVIEW = "review"  # Code review style conversation
     QA = "qa"  # Simple question-answer
     EXPLAIN = "explain"  # Explain the content conversationally
+    # Phase 3 (2026 workflows)
+    EVOL_INSTRUCT = "evol_instruct"  # Evol-Instruct depth/breadth mutation
+    RAG_QA = "rag_qa"  # Grounded QA with retrieved-chunk citations
+    TOOL_CALL = "tool_call"  # Function-calling / agent trajectory traces
+    CONSTITUTIONAL = "constitutional"  # Safety + refusal tuning
+    DISTILL = "distill"  # Full reasoning-trace distillation triples
 
 
 # Prompt templates for each mode
@@ -46,6 +52,21 @@ MODE_TEMPLATES: dict[ConversationMode, dict[str, str]] = {
     },
     ConversationMode.EXPLAIN: {
         "system": "You are a clear, patient teacher. Generate a multi-turn conversation where the user asks 'explain this to me' and the assistant provides a structured explanation covering: 1) overview, 2) key concepts, 3) practical examples, 4) common pitfalls, 5) next steps to learn more.",
+    },
+    ConversationMode.EVOL_INSTRUCT: {
+        "system": "You are an instruction-evolution engine (Evol-Instruct). Given source content, first write a base instruction, then evolve it twice: once for DEPTH (add constraints, multi-step reasoning, edge cases) and once for BREADTH (a related but distinct task). Return all three instruction-response pairs grounded in the source.",
+    },
+    ConversationMode.RAG_QA: {
+        "system": "You are a grounded QA generator for retrieval evaluation. Generate question-answer pairs where EVERY factual claim in the answer cites the provided chunk (e.g. [chunk]). If the chunk does not contain the answer, say so explicitly — never hallucinate. Include one unanswerable question to test refusal.",
+    },
+    ConversationMode.TOOL_CALL: {
+        "system": "You are an agent-trajectory generator. Generate a multi-step tool-use trace: user request, assistant reasoning, tool_call JSON (name + arguments), tool result, and final answer. Use realistic tool names (search, retrieve, execute, lookup) with valid JSON arguments.",
+    },
+    ConversationMode.CONSTITUTIONAL: {
+        "system": "You are a safety-tuning data generator (Constitutional AI). Generate prompts spanning safe completion, polite refusal with a helpful alternative, and jurisdiction-tagged edge cases. Never produce disallowed content; refusals must be brief, non-preachy, and offer a safe alternative.",
+    },
+    ConversationMode.DISTILL: {
+        "system": "You are a frontier reasoning teacher. Given source content, produce a full chain-of-thought trace (step-by-step reasoning, alternatives considered, verification) followed by the final answer. The trace must be faithful — every step grounded in the source or explicit assumptions.",
     },
 }
 
@@ -185,6 +206,42 @@ class ConversationBuilder:
                 "3. Provide practical examples\n"
                 "4. Discuss common pitfalls\n"
                 "5. Suggest next steps"
+            )
+        elif mode == ConversationMode.EVOL_INSTRUCT:
+            prompt_parts.append(
+                "\n**Instructions (Evol-Instruct):**\n"
+                "1. Write a BASE instruction + response from the source\n"
+                "2. DEPTH-evolve: add 2+ constraints / reasoning steps / edge cases, then answer\n"
+                "3. BREADTH-evolve: a neighbouring task on the same source, then answer\n"
+                "4. Tag each pair with its evolution type"
+            )
+        elif mode == ConversationMode.RAG_QA:
+            prompt_parts.append(
+                "\n**Instructions (grounded RAG QA):**\n"
+                "1. 3-5 questions answerable ONLY from the source; cite facts\n"
+                "2. 1 unanswerable question with an explicit abstention\n"
+                "3. Keep answers concise; no outside knowledge"
+            )
+        elif mode == ConversationMode.TOOL_CALL:
+            prompt_parts.append(
+                "\n**Instructions (tool traces):**\n"
+                "1. User request requiring 1-3 tool calls\n"
+                "2. For each call emit tool_call JSON {name, arguments}\n"
+                "3. Emit plausible tool results, then the final answer"
+            )
+        elif mode == ConversationMode.CONSTITUTIONAL:
+            prompt_parts.append(
+                "\n**Instructions (safety):**\n"
+                "1. One safe-completion pair\n"
+                "2. One refusal pair (brief, helpful alternative, no lecture)\n"
+                "3. Tag jurisdiction/sensitivity where relevant"
+            )
+        elif mode == ConversationMode.DISTILL:
+            prompt_parts.append(
+                "\n**Instructions (distillation):**\n"
+                "1. Full step-by-step reasoning trace first\n"
+                "2. Note alternatives considered + verification step\n"
+                "3. Final answer last, consistent with the trace"
             )
 
         prompt_parts.append('\nReturn JSON: {"conversation": [{"role": "...", "content": "..."}, ...]}')

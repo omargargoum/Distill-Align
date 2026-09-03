@@ -176,7 +176,7 @@ class DatasetCardGenerator:
         # Synthesis config
         cfg = config or {}
         provider = cfg.get("provider", "openai")
-        model = cfg.get("model", "gpt-4o")
+        model = cfg.get("model", "gpt-5-mini")
         temperature = cfg.get("temperature", 0.7)
         socratic = cfg.get("socratic", True)
         scaffold = cfg.get("scaffold", True)

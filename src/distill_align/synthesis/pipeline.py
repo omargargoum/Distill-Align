@@ -93,6 +93,7 @@ class SynthesisPipeline:
         # Local imports to avoid circular dependencies and keep startup fast.
         from .models.anthropic import AnthropicClient
         from .models.azure import AzureClient
+        from .models.gateway import GatewayClient
         from .models.gemini import GeminiClient
         from .models.ollama import OllamaClient
         from .models.openai import OpenAIClient
@@ -108,7 +109,11 @@ class SynthesisPipeline:
         }
         client_cls = _format_clients.get(api_format)
         if client_cls is None:
-            raise SynthesisError(f"Unknown API format: {api_format}")
+            # Gateway / hosted open-weight providers are OpenAI-compatible.
+            # Route unknown formats through GatewayClient (adds attribution
+            # headers + provider routing) instead of failing.
+            client = GatewayClient(base_url=base_url, api_key=api_key, model=model)
+            return client
 
         # Some local clients (ollama, vllm) don't require an API key.
         kwargs: dict[str, str | None] = {"base_url": base_url, "model": model}
@@ -138,6 +143,17 @@ class SynthesisPipeline:
         info = get_provider_info(provider)
         if info is None:
             raise SynthesisError(f"Unknown provider: {provider!r}. Available: {', '.join(list_provider_names())}")
+
+        # Gateway providers speak OpenAI-compatible APIs but benefit from
+        # attribution headers + routing extras (OpenRouter HTTP-Referer etc.)
+        if provider in ("openrouter", "litellm", "together", "groq", "mistral", "deepseek", "cohere", "qwen"):
+            from .models.gateway import GatewayClient
+
+            return GatewayClient(
+                base_url=self.config.base_url or info.default_base_url,
+                api_key=self.config.api_key,
+                model=model,
+            )
 
         return self._client_for_format(
             info.api_format,
@@ -218,8 +234,22 @@ class SynthesisPipeline:
 
         conversation = None
 
+        # Optional v2 mode routing: when conversation_mode != default, use
+        # ConversationBuilder (Evol-Instruct, RAG-QA, tool-call, safety, distill).
+        mode = getattr(self.config, "conversation_mode", "default") or "default"
+        if mode != "default":
+            try:
+                from .conversation_builder import ConversationBuilder, ConversationMode
+
+                builder = ConversationBuilder(pruner=self._pruner)
+                built = await builder.build_conversation(chunk, ConversationMode(mode), llm_client)
+                if built is not None:
+                    conversation = built
+            except Exception as e:
+                logger.warning(f"Mode {mode!r} build failed, falling back to Socratic: {e}")
+
         # Step 1: Socratic Transformer
-        if self.config.socratic_enabled:
+        if conversation is None and self.config.socratic_enabled:
             conversation = await self._apply_socratic(chunk.content, metadata, llm_client, source_chunk_id=chunk_id)
 
         # Step 2: Scaffold Action

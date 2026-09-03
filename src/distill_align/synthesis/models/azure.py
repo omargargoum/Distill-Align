@@ -32,7 +32,7 @@ class AzureClient(BaseLLMClient):
         self,
         base_url: str = "https://api.openai.azure.com",
         api_key: str | None = None,
-        model: str = "gpt-4o",  # Deployment name in Azure
+        model: str = "gpt-5-mini",  # Deployment name in Azure
         timeout: float = 120.0,
         max_retries: int = 3,
         azure_ad_token: str | None = None,

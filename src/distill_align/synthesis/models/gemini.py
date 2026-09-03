@@ -23,7 +23,7 @@ class GeminiClient(BaseLLMClient):
         self,
         base_url: str = "https://generativelanguage.googleapis.com/v1beta",
         api_key: str | None = None,
-        model: str = "gemini-2.0-flash",
+        model: str = "gemini-3.5-flash",
         timeout: float = 120.0,
         max_retries: int = 3,
     ):
@@ -110,7 +110,16 @@ class GeminiClient(BaseLLMClient):
         if system_instruction:
             payload["system_instruction"] = {"parts": [{"text": system_instruction}]}
         if response_format:
+            # Gemini native: response_mime_type=json + responseSchema for
+            # constrained decoding. Accept both json_object and strict
+            # json_schema wrappers from build_strict_response_format().
             payload["generationConfig"]["response_mime_type"] = "application/json"
+            try:
+                schema = response_format.get("json_schema", {}).get("schema")
+            except AttributeError:
+                schema = None
+            if schema:
+                payload["generationConfig"]["responseSchema"] = schema
         payload.update(kwargs)
 
         endpoint = f"/models/{self.model}:generateContent"

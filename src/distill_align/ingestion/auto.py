@@ -138,34 +138,60 @@ class AutoIngestionPipeline:
         """
         Get the appropriate chunker for a source type.
 
+        Honors ``IngestionConfig.chunker``: ``"auto"`` keeps legacy routing
+        (markdown → header-aware, code → definition-aware, else plain);
+        explicit values force semantic / parent-child / late / recursive.
+
         Args:
             source_type: Type of source content.
 
         Returns:
             Chunker instance.
         """
-        if source_type in self._chunkers:
-            return self._chunkers[source_type]
+        forced = getattr(self.config, "chunker", "auto")
+        cache_key = f"{source_type}:{forced}"
+        if cache_key in self._chunkers:
+            return self._chunkers[cache_key]
 
-        if source_type == "markdown":
-            chunker: MarkdownChunker | CodeChunker = MarkdownChunker(
-                chunk_size=self.config.chunk_size,
-                chunk_overlap=self.config.chunk_overlap,
+        base_kwargs = {
+            "chunk_size": self.config.chunk_size,
+            "chunk_overlap": self.config.chunk_overlap,
+        }
+
+        chunker: BaseChunker
+        if forced == "semantic":
+            from .chunkers.semantic import SemanticChunker
+
+            chunker = SemanticChunker(
+                **base_kwargs,
+                breakpoint=getattr(self.config, "semantic_breakpoint", "percentile"),
+                threshold=getattr(self.config, "semantic_threshold", 75.0),
+            )
+        elif forced == "parent_child":
+            from .chunkers.parent_child import ParentChildChunker
+
+            chunker = ParentChildChunker(**base_kwargs)
+        elif forced == "late":
+            from .chunkers.late import LateChunker
+
+            chunker = LateChunker(**base_kwargs)
+        elif forced == "recursive":
+            chunker = MarkdownChunker(**base_kwargs, respect_headers=False)
+        elif forced == "markdown":
+            chunker = MarkdownChunker(**base_kwargs, respect_headers=self.config.respect_headers)
+        elif forced == "code":
+            chunker = CodeChunker(**base_kwargs)
+        elif source_type == "markdown":
+            chunker = MarkdownChunker(
+                **base_kwargs,
                 respect_headers=self.config.respect_headers,
             )
         elif source_type == "code":
-            chunker = CodeChunker(
-                chunk_size=self.config.chunk_size,
-                chunk_overlap=self.config.chunk_overlap,
-            )
+            chunker = CodeChunker(**base_kwargs)
         else:
-            chunker = MarkdownChunker(
-                chunk_size=self.config.chunk_size,
-                chunk_overlap=self.config.chunk_overlap,
-                respect_headers=False,
-            )
+            chunker = MarkdownChunker(**base_kwargs, respect_headers=False)
 
-        self._chunkers[source_type] = chunker
+        self._chunkers[cache_key] = chunker
         return chunker
 
     def scan_directory(
@@ -248,6 +274,61 @@ class AutoIngestionPipeline:
             metadata = loader.extract_metadata()
             chunker = self.get_chunker(metadata.source_type)
             chunks = loader.to_chunks(chunker)
+
+            # Table serialization: emit row-sentences alongside grids so
+            # each fact is individually retrievable (Phase 2).
+            serialize_mode = getattr(self.config, "serialize_tables", "both")
+            if serialize_mode != "markdown":
+                from .tables import serialize_markdown_tables
+
+                enriched: list[DataChunk] = []
+                for chunk in chunks:
+                    if "|" in chunk.content and "---" in chunk.content:
+                        new_content = serialize_markdown_tables(chunk.content, mode=serialize_mode)
+                        if new_content != chunk.content:
+                            enriched.append(
+                                DataChunk(content=new_content, metadata=chunk.metadata, tokens=chunk.tokens)
+                            )
+                            continue
+                    enriched.append(chunk)
+                chunks = enriched
+
+            # Contextual heading-path prefix (cheap late-chunking half).
+            if getattr(self.config, "contextual_prefix", False):
+                from .chunkers.late import LateChunker
+
+                prefixer = LateChunker(
+                    chunk_size=self.config.chunk_size,
+                    chunk_overlap=self.config.chunk_overlap,
+                )
+                prefixed: list[DataChunk] = []
+                for chunk in chunks:
+                    if chunk.content.startswith("[Context:"):
+                        prefixed.append(chunk)
+                        continue
+                    heading = " > ".join(chunk.metadata.section_headers) or (chunk.metadata.title or "")
+                    lead = " ".join(chunk.content.split())[:300]
+                    pfx = f"[Context: {heading} | {lead}]" if (heading or lead) else ""
+                    if pfx:
+                        tags = {**chunk.metadata.custom_tags, "context_prefix": pfx}
+                        fresh = chunk.metadata.model_copy(update={"custom_tags": tags})
+                        prefixed.append(DataChunk(content=f"{pfx}\n\n{chunk.content}", metadata=fresh))
+                    else:
+                        prefixed.append(chunk)
+                _ = prefixer  # (explicit LateChunker use stays available via chunker="late")
+                chunks = prefixed
+
+            # Optional embeddings for semantic dedup downstream.
+            if getattr(self.config, "enable_embeddings", False):
+                from .embeddings import get_embedder
+
+                embedder = get_embedder()
+                try:
+                    results = embedder.embed([c.content for c in chunks])
+                    for chunk, res in zip(chunks, results, strict=False):
+                        chunk.embedding = res.embedding
+                except Exception as e:
+                    logger.warning(f"Embeddings enrichment failed: {e}")
 
             # Optional PII/secret scanning
             if self.config.scan_pii:

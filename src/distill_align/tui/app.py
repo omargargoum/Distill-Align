@@ -25,7 +25,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any
 
 from loguru import logger
 from textual.app import App, ComposeResult  # type: ignore[import-not-found]
@@ -53,7 +53,6 @@ from ..core.checkpoint import CheckpointManager
 from ..core.config_file import find_config_file, generate_default_config, load_config
 from ..core.json_utils import safe_json_load
 from ..core.update_checker import check_pypi_version
-from ..synthesis.models.base import BaseLLMClient
 from ..synthesis.models.registry import get as get_provider_info
 from ..synthesis.models.registry import list_select_choices
 
@@ -64,6 +63,12 @@ from .modes.base import (
     MODE_LABELS,
     MODE_SIMPLE,
     get_template,
+)
+from .options import (
+    chunker_choices,
+    conversation_mode_choices,
+    export_format_choices,
+    validate_chunker,
 )
 from .widgets.help_overlay import HelpOverlay
 from .widgets.preflight import (
@@ -335,6 +340,15 @@ class IngestTab(Container):
                 yield Label("Auto-detect:", classes="form-label")
                 yield Switch(value=True, id="ingest-auto")
 
+            with Horizontal(classes="form-row expert-only"):
+                yield Label("Chunker:", classes="form-label")
+                yield Select(
+                    chunker_choices(),
+                    value="auto",
+                    id="ingest-chunker",
+                    classes="form-select",
+                )
+
             # Simple mode hint about advanced options
             yield Static(
                 "[dim]💡 Press [reverse] m [/reverse] for expert options (overlap, recursive scanning, etc.)[/dim]",
@@ -354,6 +368,7 @@ class IngestTab(Container):
             "overlap": int(self.query_one("#ingest-overlap", Input).value or "200"),
             "recursive": self.query_one("#ingest-recursive", Switch).value,
             "auto_detect": self.query_one("#ingest-auto", Switch).value,
+            "chunker": self.query_one("#ingest-chunker", Select).value or "auto",
         }
 
     def validate_config(self) -> str | None:
@@ -363,6 +378,8 @@ class IngestTab(Container):
             return "Source path is required"
         if not Path(cfg["source"]).exists():
             return f"Source not found: {cfg['source']}"
+        if not validate_chunker(cfg["chunker"]):
+            return f"Unknown chunker: {cfg['chunker']}"
         try:
             _validate_positive_int(str(cfg["chunk_size"]), "chunk size", 1000)
             _validate_positive_int(str(cfg["overlap"]), "overlap", 200)
@@ -415,11 +432,11 @@ class SynthesizeTab(Container):
                     classes="form-select",
                 )
                 yield Label("Model:", classes="form-label")
-                yield Input(value="gpt-4o", id="synth-model", classes="form-input")
+                yield Input(value="gpt-5-mini", id="synth-model", classes="form-input")
 
             # Simple mode: provider/model tip
             yield Static(
-                "[dim]💡 Use [bold]gpt-4o-mini[/bold] for speed or [bold]ollama[/bold] with [bold]llama3.2[/bold] for free local generation.[/dim]",
+                "[dim]💡 Use [bold]gpt-5-mini[/bold] for balanced quality or [bold]ollama[/bold] with [bold]qwen3:30b[/bold] for free local generation.[/dim]",
                 classes="simple-only",
             )
 
@@ -440,7 +457,7 @@ class SynthesizeTab(Container):
                 with Horizontal(classes="form-row"):
                     yield Label("Mode:", classes="form-label")
                     yield Select(
-                        [(m, m) for m in ["default", "teach", "debug", "review", "qa", "explain"]],
+                        conversation_mode_choices(),
                         value="default",
                         id="synth-mode",
                         classes="form-select",
@@ -469,7 +486,7 @@ class SynthesizeTab(Container):
             "input": self.query_one("#synth-input", Input).value.strip() or "./chunks.json",
             "output": self.query_one("#synth-output", Input).value.strip() or "./conversations.json",
             "provider": self.query_one("#synth-provider", Select).value or "openai",
-            "model": self.query_one("#synth-model", Input).value.strip() or "gpt-4o",
+            "model": self.query_one("#synth-model", Input).value.strip() or "gpt-5-mini",
             "base_url": self.query_one("#synth-base-url", Input).value.strip() or None,
             "concurrency": int(self.query_one("#synth-concurrency", Input).value or "5"),
             "rpm": int(self.query_one("#synth-rpm", Input).value or "60"),
@@ -513,7 +530,7 @@ class SynthesizeTab(Container):
 class ExportTab(Container):
     """Tab for running the export pipeline."""
 
-    FORMATS = ["sharegpt", "alpaca", "chatml", "conversation", "hf_messages", "jsonl", "parquet"]
+    FORMATS = [fmt for fmt, _ in export_format_choices()]
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -536,7 +553,7 @@ class ExportTab(Container):
             # Expert-only advanced
             with Horizontal(classes="form-row expert-only"):
                 yield Label("Unsloth model:", classes="form-label")
-                yield Input(value="unsloth/Meta-Llama-3.1-8B-Instruct", id="export-unsloth-model", classes="form-input")
+                yield Input(value="Qwen/Qwen3-8B", id="export-unsloth-model", classes="form-input")
 
             yield Label("Formats:", classes="form-label")
             with Horizontal(id="export-formats-row"):
@@ -578,8 +595,7 @@ class ExportTab(Container):
         return {
             "input": self.query_one("#export-input", Input).value.strip() or "./conversations.json",
             "output_dir": self.query_one("#export-output-dir", Input).value.strip() or "./output",
-            "unsloth_model": self.query_one("#export-unsloth-model", Input).value.strip()
-            or "unsloth/Meta-Llama-3.1-8B-Instruct",
+            "unsloth_model": self.query_one("#export-unsloth-model", Input).value.strip() or "Qwen/Qwen3-8B",
             "formats": self.get_selected_formats(),
             "unsloth": self.query_one("#export-unsloth", Switch).value,
             "split": self.query_one("#export-split", Switch).value,
@@ -648,6 +664,20 @@ class ValidateTab(Container):
             yield Label("Ready", id="validate-status")
             yield DataTable(id="validate-results")
 
+            yield Label("📊 Quality Gate (Evaluate)", classes="section-title")
+            yield Static(
+                "Heuristic + judge-score quality gate (no LLM calls). Fails the gate when "
+                "confidence or validity drops below threshold.",
+                classes="simple-only simple-help",
+            )
+            with Horizontal(classes="form-row"):
+                yield Label("Min confidence:", classes="form-label")
+                yield Input(value="0.5", id="eval-threshold", classes="form-input-small")
+                yield Label("Min valid rate:", classes="form-label")
+                yield Input(value="0.8", id="eval-min-valid", classes="form-input-small")
+            yield Button("📊 Run Evaluation", id="evaluate-run", variant="primary")
+            yield Label("Ready", id="evaluate-status")
+
     def on_mount(self) -> None:
         table = self.query_one("#validate-results", DataTable)
         table.add_columns("Metric", "Value")
@@ -656,6 +686,22 @@ class ValidateTab(Container):
         return {
             "input": self.query_one("#validate-input", Input).value.strip() or "./conversations.json",
             "dedupe": self.query_one("#validate-dedupe", Switch).value,
+        }
+
+    def get_eval_config(self) -> dict[str, Any]:
+        """Get evaluation gate form values."""
+        try:
+            threshold = float(self.query_one("#eval-threshold", Input).value or "0.5")
+        except ValueError:
+            threshold = 0.5
+        try:
+            min_valid = float(self.query_one("#eval-min-valid", Input).value or "0.8")
+        except ValueError:
+            min_valid = 0.8
+        return {
+            "input": self.query_one("#validate-input", Input).value.strip() or "./conversations.json",
+            "threshold": min(max(threshold, 0.0), 1.0),
+            "min_valid_rate": min(max(min_valid, 0.0), 1.0),
         }
 
     def validate_config(self) -> str | None:
@@ -715,6 +761,14 @@ class FullPipelineTab(Container):
                     yield Switch(value=True, id="full-recursive")
                     yield Label("Auto-detect:", classes="form-label")
                     yield Switch(value=True, id="full-auto")
+                with Horizontal(classes="form-row expert-only"):
+                    yield Label("Chunker:", classes="form-label")
+                    yield Select(
+                        chunker_choices(),
+                        value="auto",
+                        id="full-chunker",
+                        classes="form-select",
+                    )
 
             with Vertical(id="full-synth-section"):
                 yield Label("[bold]🧠 Synthesis[/bold]", classes="section-title")
@@ -732,7 +786,7 @@ class FullPipelineTab(Container):
                         classes="form-select",
                     )
                     yield Label("Model:", classes="form-label")
-                    yield Input(value="gpt-4o", id="full-model", classes="form-input")
+                    yield Input(value="gpt-5-mini", id="full-model", classes="form-input")
                 # Expert-only synthesis controls
                 with Horizontal(classes="form-row expert-only"):
                     yield Label("Concurrency:", classes="form-label")
@@ -742,7 +796,7 @@ class FullPipelineTab(Container):
                 with Horizontal(classes="form-row expert-only"):
                     yield Label("Mode:", classes="form-label")
                     yield Select(
-                        [(m, m) for m in ["default", "teach", "debug", "review", "qa", "explain"]],
+                        conversation_mode_choices(),
                         value="default",
                         id="full-mode",
                         classes="form-select",
@@ -766,10 +820,7 @@ class FullPipelineTab(Container):
                 with Horizontal(classes="form-row"):
                     yield Label("Format:", classes="form-label")
                     yield Select(
-                        [
-                            (f, f)
-                            for f in ["sharegpt", "alpaca", "chatml", "conversation", "hf_messages", "jsonl", "parquet"]
-                        ],
+                        export_format_choices(),
                         value="sharegpt",
                         id="full-format",
                         classes="form-select",
@@ -796,8 +847,9 @@ class FullPipelineTab(Container):
             "overlap": int(self.query_one("#full-overlap", Input).value or "200"),
             "recursive": self.query_one("#full-recursive", Switch).value,
             "auto_detect": self.query_one("#full-auto", Switch).value,
+            "chunker": self.query_one("#full-chunker", Select).value or "auto",
             "provider": self.query_one("#full-provider", Select).value or "openai",
-            "model": self.query_one("#full-model", Input).value.strip() or "gpt-4o",
+            "model": self.query_one("#full-model", Input).value.strip() or "gpt-5-mini",
             "concurrency": int(self.query_one("#full-concurrency", Input).value or "5"),
             "rpm": int(self.query_one("#full-rpm", Input).value or "60"),
             "mode": self.query_one("#full-mode", Select).value or "default",
@@ -815,6 +867,8 @@ class FullPipelineTab(Container):
             return "Source path is required"
         if not Path(cfg["source"]).exists():
             return f"Source not found: {cfg['source']}"
+        if not validate_chunker(cfg["chunker"]):
+            return f"Unknown chunker: {cfg['chunker']}"
         try:
             _validate_positive_int(str(cfg["concurrency"]), "concurrency", 5)
             _validate_positive_int(str(cfg["rpm"]), "RPM", 60)
@@ -1388,6 +1442,9 @@ class DistillAlignApp(App):
         elif button_id == "validate-run":
             self._run_validate()  # No pre-flight needed for validate
 
+        elif button_id == "evaluate-run":
+            self._run_evaluate()  # No pre-flight needed for evaluate
+
         # --- Full Pipeline Tab ---
         elif button_id == "full-run":
             self._run_full_pipeline_with_preflight()
@@ -1420,7 +1477,7 @@ class DistillAlignApp(App):
                 full_tab = self.query_one(FullPipelineTab)
                 full_tab.query_one("#full-source", Input).value = config.get("source", "./data")
                 full_tab.query_one("#full-provider", Select).value = config.get("provider", "openai")
-                full_tab.query_one("#full-model", Input).value = config.get("model", "gpt-4o-mini")
+                full_tab.query_one("#full-model", Input).value = config.get("model", "gpt-5-mini")
                 full_tab.query_one("#full-output-dir", Input).value = config.get("output_dir", "./output")
                 full_tab.query_one("#full-format", Select).value = config.get("format", "sharegpt")
 
@@ -1541,7 +1598,7 @@ class DistillAlignApp(App):
                 if "overlap" in result:
                     full_tab.query_one("#full-overlap", Input).value = str(result["overlap"])
                 full_tab.query_one("#full-provider", Select).value = result.get("provider", "openai")
-                full_tab.query_one("#full-model", Input).value = result.get("model", "gpt-4o")
+                full_tab.query_one("#full-model", Input).value = result.get("model", "gpt-5-mini")
                 if "concurrency" in result:
                     full_tab.query_one("#full-concurrency", Input).value = str(result["concurrency"])
                 if "rpm" in result:
@@ -1789,6 +1846,7 @@ class DistillAlignApp(App):
         overlap: int | None = None,
         recursive: bool | None = None,
         auto_detect: bool | None = None,
+        chunker: str | None = None,
         silent: bool = False,
     ) -> str | None:
         """Run the ingestion pipeline in a worker thread.
@@ -1809,6 +1867,7 @@ class DistillAlignApp(App):
                 "overlap": overlap or 200,
                 "recursive": recursive if recursive is not None else True,
                 "auto_detect": auto_detect if auto_detect is not None else True,
+                "chunker": chunker or "auto",
             }
 
         if not silent:
@@ -1835,6 +1894,7 @@ class DistillAlignApp(App):
                 pipeline_config = IngestionConfig(
                     chunk_size=config["chunk_size"],
                     chunk_overlap=config["overlap"],
+                    chunker=config.get("chunker", "auto"),
                 )
 
                 pipeline: AutoIngestionPipeline | IngestionPipeline = (
@@ -1949,7 +2009,7 @@ class DistillAlignApp(App):
                 "input": input_path_str or "./chunks.json",
                 "output": output or "./conversations.json",
                 "provider": provider or "openai",
-                "model": model or "gpt-4o",
+                "model": model or "gpt-5-mini",
                 "base_url": base_url or None,
                 "concurrency": concurrency or 5,
                 "rpm": rpm or 60,
@@ -1990,7 +2050,6 @@ class DistillAlignApp(App):
                 from ..core.checkpoint import CheckpointManager as CPCheckpoint
                 from ..core.schemas import DataChunk
                 from ..core.schemas import SynthesisConfig as SynthCfg
-                from ..synthesis.conversation_builder import ConversationBuilder, ConversationMode
                 from ..synthesis.pipeline import SynthesisPipeline as SynthPipe
 
                 chunks_data = safe_json_load(input_path)
@@ -2019,6 +2078,7 @@ class DistillAlignApp(App):
                     max_rpm=config["rpm"],
                     max_tokens=config["max_tokens"],
                     enable_judge=config["judge"],
+                    conversation_mode=config["mode"],
                 )
                 pipeline = SynthPipe(
                     config=synth_config,
@@ -2027,27 +2087,19 @@ class DistillAlignApp(App):
                     use_cache=config["cache"],
                 )
 
-                use_builder = config["mode"] != "default"
-
                 async def run() -> list[Any]:
                     def update_progress(current: int, total: int) -> None:
                         self.call_from_thread(self._notify_dashboard, f"Synthesizing {current}/{total}", current, total)
                         self.call_from_thread(self._update_synth_progress, current, total)
 
-                    if use_builder:
-                        builder = ConversationBuilder()
-                        client = cast(BaseLLMClient, pipeline._get_client())
-                        mode_enum = ConversationMode(config["mode"])
-                        return await builder.build_batch(
-                            chunks, mode_enum, client, max_concurrency=config["concurrency"]
-                        )
-                    else:
-                        return await pipeline.synthesize_batch(
-                            chunks,
-                            update_progress,
-                            job_id=config.get("job_id"),
-                            resume=config.get("job_id") is not None,
-                        )
+                    # All modes route through the pipeline (mode routing +
+                    # scaffold + prune + judge, with cache/checkpoint support).
+                    return await pipeline.synthesize_batch(
+                        chunks,
+                        update_progress,
+                        job_id=config.get("job_id"),
+                        resume=config.get("job_id") is not None,
+                    )
 
                 conversations = asyncio.run(run())
 
@@ -2172,7 +2224,7 @@ class DistillAlignApp(App):
                 "input": input_path_str or "./conversations.json",
                 "output_dir": output_dir or "./output",
                 "formats": formats or ["sharegpt"],
-                "unsloth_model": unsloth_model or "unsloth/Meta-Llama-3.1-8B-Instruct",
+                "unsloth_model": unsloth_model or "Qwen/Qwen3-8B",
                 "unsloth": generate_unsloth if generate_unsloth is not None else True,
                 "split": split or False,
                 "card": card or False,
@@ -2214,12 +2266,7 @@ class DistillAlignApp(App):
                 conversations = [ConversationSchema(**conv) for conv in conv_data]
 
                 export_config = ExportConfig(
-                    formats=cast(
-                        list[
-                            Literal["sharegpt", "alpaca", "chatml", "conversation", "hf_messages", "jsonl", "parquet"]
-                        ],
-                        config["formats"],
-                    ),
+                    formats=config["formats"],
                     output_dir=config["output_dir"],
                     unsloth_model=config["unsloth_model"],
                 )
@@ -2375,6 +2422,82 @@ class DistillAlignApp(App):
         logger.error(f"Validation failed: {error}")
         self.notify(f"Validation failed: {error}", severity="error")
 
+    def _run_evaluate(self) -> None:
+        """Run the quality-gate evaluation in a worker thread (no LLM calls)."""
+        validate_tab = self.query_one(ValidateTab)
+        err = validate_tab.validate_config()
+        if err:
+            self.notify(err, severity="warning")
+            return
+
+        config = validate_tab.get_eval_config()
+        input_path = Path(config["input"])
+        if not input_path.exists():
+            self.notify(f"Input not found: {config['input']}", severity="error")
+            return
+
+        with contextlib.suppress(Exception):
+            self.query_one("#evaluate-status", Label).update("[yellow]Running...[/yellow]")
+        self._notify_dashboard("Evaluating dataset")
+        logger.info("Starting evaluation gate")
+
+        def do_evaluate() -> None:
+            try:
+                from ..core.schemas import ConversationSchema
+                from ..synthesis.eval import EvalThresholds, evaluate_conversations
+
+                conv_data = safe_json_load(input_path)
+                conversations = [ConversationSchema(**conv) for conv in conv_data]
+
+                report = evaluate_conversations(
+                    conversations,
+                    thresholds=EvalThresholds(
+                        min_mean_confidence=config["threshold"],
+                        min_valid_rate=config["min_valid_rate"],
+                    ),
+                )
+                self.call_from_thread(self._evaluate_done, report)
+            except Exception as e:
+                self.call_from_thread(self._evaluate_error, str(e))
+
+        self.run_worker(do_evaluate, thread=True)
+
+    def _evaluate_done(self, report: Any) -> None:
+        """Called when evaluation completes successfully."""
+        gate = "[green]✓ PASS[/green]" if report.passed else "[red]✗ FAIL[/red]"
+        with contextlib.suppress(Exception):
+            self.query_one("#evaluate-status", Label).update(
+                f"{gate} — valid {report.valid_rate:.0%}, confidence {report.mean_confidence:.2f}"
+            )
+        try:
+            table = self.query_one("#validate-results", DataTable)
+            table.clear()
+            table.add_rows(
+                [
+                    ("Eval Gate", "PASS" if report.passed else "FAIL"),
+                    ("Valid Rate", f"{report.valid_rate:.1%}"),
+                    ("Mean Confidence", f"{report.mean_confidence:.3f}"),
+                    ("Contamination", f"{report.contamination_rate:.1%}"),
+                    ("Failures", "; ".join(report.failures) if report.failures else "none"),
+                ]
+            )
+            log_view = self.query_one("#log-view", RichLog)
+            log_view.write(f"[bold magenta]📊 Evaluation Report:[/bold magenta]\n{report.summary()}")
+        except Exception as e:
+            logger.error(f"Failed to populate evaluation results: {e}")
+        self.notify(
+            f"Evaluation {'passed' if report.passed else 'failed'}",
+            severity="information" if report.passed else "warning",
+        )
+        self._set_last_run(f"Evaluation: {'PASS' if report.passed else 'FAIL'}")
+
+    def _evaluate_error(self, error: str) -> None:
+        """Called when evaluation fails."""
+        with contextlib.suppress(Exception):
+            self.query_one("#evaluate-status", Label).update(f"[red]✗ Error:[/red] {error}")
+        logger.error(f"Evaluation failed: {error}")
+        self.notify(f"Evaluation failed: {error}", severity="error")
+
     # =========================================================================
     # Full Pipeline (Ingest → Synthesize → Export)
     # =========================================================================
@@ -2411,6 +2534,7 @@ class DistillAlignApp(App):
             overlap=config["overlap"],
             recursive=config["recursive"],
             auto_detect=config["auto_detect"],
+            chunker=config["chunker"],
             silent=True,
         )
 

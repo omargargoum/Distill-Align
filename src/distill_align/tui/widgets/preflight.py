@@ -19,6 +19,16 @@ from textual.widgets import Button, Static
 from ...synthesis.models.registry import get as get_provider_info
 
 
+def _valid_modes() -> set[str]:
+    """Accepted conversation modes, derived from the pipeline's enum."""
+    try:
+        from ..options import valid_conversation_modes
+
+        return valid_conversation_modes()
+    except Exception:
+        return {"default", "qa", "teach", "debug", "review", "explain"}
+
+
 def _provider_env_vars(provider: str) -> list[str]:
     """Return the env-var list for *provider*, or empty list if unknown."""
     info = get_provider_info(provider)
@@ -327,7 +337,7 @@ def preflight_synthesize(
     report.checks.append(_check_api_key(provider))
     report.checks.append(_check_concurrency(concurrency, provider))
 
-    if mode and mode not in ("default", "qa", "teach", "debug", "review", "explain"):
+    if mode and mode not in _valid_modes():
         report.checks.append(CheckResult(name="Mode", status="warn", message=f"Unknown mode: {mode}", fix=""))
 
     return report

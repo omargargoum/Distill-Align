@@ -18,13 +18,13 @@
 
 ## Features
 
-- **Smart Ingestion**: Async chunking pipelines with semantic-aware splitting for Markdown and Code (PDF, DOCX, HTML, CSV, JSON, Jupyter notebooks, and web pages also supported).
-- **Multi-Provider Synthesis**: Supports **OpenAI**, **Ollama**, **vLLM**, **Anthropic Claude**, **Google Gemini**, and **Azure OpenAI** backends with async worker pools.
-- **Socratic Transformer**: Converts raw reasoning into structured, multi-turn conversational Q&A.
+- **Smart Ingestion**: Async chunking pipelines with semantic-aware splitting for Markdown and Code (PDF, DOCX, HTML, CSV, JSON, Jupyter notebooks, and web pages also supported). v0.2 adds **semantic**, **parent-child (small-to-big)**, and **late-contextual** chunkers, table row-sentence serialization, and an optional Docling parser.
+- **Multi-Provider Synthesis**: Supports **OpenAI**, **Ollama**, **vLLM**, **Anthropic Claude**, **Google Gemini**, and **Azure OpenAI** backends with async worker pools — plus 2026 gateways (**OpenRouter, LiteLLM, Together, Groq, Mistral, DeepSeek, Cohere**) and strict structured outputs per provider.
+- **Socratic Transformer**: Converts raw reasoning into structured, multi-turn conversational Q&A. v0.2 adds **Evol-Instruct**, **RAG-QA (grounded)**, **tool-call/agent traces**, **Constitutional safety**, and **distillation-trace** modes.
 - **Scaffold Action Pruner**: Strips conversational filler to extract pure tool-calling or structural output.
-- **LLM-as-Judge Evaluation** (optional): Automated quality scoring of generated conversations using a separate judge model, with confidence scores normalized 0–1.
-- **Preference (DPO) Generation**: Create preference pairs from judge-scored conversations for Direct Preference Optimization training.
-- **Multiple Export Formats**: ShareGPT, Alpaca, ChatML, HuggingFace messages (JSONL/JSON), streaming JSON Lines, and **Apache Parquet**.
+- **LLM-as-Judge Evaluation** (optional): Automated quality scoring of generated conversations using a separate judge model, with confidence scores normalized 0–1. v0.2 adds **faithfulness/groundedness rubrics**, **dual-judge (gate + audit)**, and a `distill-align evaluate` CI gate with contamination checks.
+- **Preference Generation**: Create pairs for **DPO** — plus **KTO** (unpaired labels), **ORPO** (single-stage), and **GRPO**-ready groups with verifiable-reward stubs.
+- **Multiple Export Formats**: ShareGPT, Alpaca, ChatML, HuggingFace messages (JSONL/JSON), KTO, GRPO, agent trajectories, RAG-QA, streaming JSON Lines, and **Apache Parquet**.
 - **Streaming Export**: Export large datasets without loading them entirely into memory using iterative producers.
 - **Cost Tracking**: Pay-as-you-go cost estimation and tracking across all providers with per-request token accounting.
 - **Unsloth Integration**: Auto-generates optimized `train.py` scripts for Unsloth fine-tuning.
@@ -82,7 +82,7 @@ docker run --rm \
     --input /app/data/chunks.json \
     --output /app/output/conversations.json \
     --provider openai \
-    --model gpt-4o
+    --model gpt-5-mini
 ```
 
 ## Configuration
@@ -105,7 +105,7 @@ distill-align init
 
 ```bash
 export DISTILL_LLM_PROVIDER=openai
-export DISTILL_LLM_MODEL=gpt-4o
+export DISTILL_LLM_MODEL=gpt-5-mini
 export DISTILL_LLM_API_KEY=sk-...
 export DISTILL_LOG_LEVEL=INFO
 ```
@@ -119,6 +119,10 @@ export DISTILL_LOG_LEVEL=INFO
 | `GOOGLE_API_KEY`          | Google Gemini     | Google AI Studio API key           |
 | `AZURE_OPENAI_API_KEY`    | Azure OpenAI      | Azure OpenAI resource key          |
 | `AZURE_OPENAI_ENDPOINT`   | Azure OpenAI      | Azure OpenAI endpoint URL          |
+| `DASHSCOPE_API_KEY`       | Qwen              | Alibaba DashScope API key          |
+| `DEEPSEEK_API_KEY`        | DeepSeek          | DeepSeek API key                   |
+| `MISTRAL_API_KEY`         | Mistral           | Mistral La Plateforme key          |
+| `OPENROUTER_API_KEY`      | OpenRouter        | OpenRouter gateway key             |
 | `DISTILL_LLM_API_KEY`     | Any provider      | Generic override (takes precedence) |
 
 ## Quick Start
@@ -132,9 +136,9 @@ distill-align synthesize \
     --input ./chunks.json \
     --output ./conversations.json \
     --provider openai \
-    --model gpt-4o \
+    --model gpt-5-mini \
     --judge \
-    --judge-model gpt-4o-mini
+    --judge-model gpt-5-nano
 
 # Export to training format
 distill-align export \
@@ -148,6 +152,14 @@ distill-align export \
     --format preference \
     --output ./dpo-pairs
 
+# Zero-LLM quality gate (CI-friendly) with contamination check
+distill-align evaluate \
+    --input ./conversations.json \
+    --threshold 0.5
+
+# Serve the REST API (requires the serve extra)
+distill-align serve --port 8000
+
 # Launch TUI
 distill-align tui
 ```
@@ -156,12 +168,15 @@ distill-align tui
 
 | Provider    | SDK-Free | Structured Output | Auth                          |
 |-------------|----------|-------------------|-------------------------------|
-| OpenAI      | ✓        | ✓                 | API key                       |
-| Anthropic   | ✓        | ✓ (JSON mode)     | API key                       |
-| Google Gemini | ✓      | ✓ (MIME type)     | API key                       |
+| OpenAI      | ✓        | ✓ (strict)        | API key                       |
+| Anthropic   | ✓        | ✓ (`output_config`, GA) | API key                 |
+| Google Gemini | ✓      | ✓ (`responseSchema`) | API key                     |
 | Azure OpenAI | ✓       | ✓                 | API key or Entra ID (OAuth2)  |
-| Ollama      | ✓        | —                 | None (local)                  |
-| vLLM        | ✓        | ✓ (OpenAI compat) | None / API key                |
+| Ollama      | ✓        | ✓ (schema `format`) | None (local)                |
+| vLLM        | ✓        | ✓ (`guided_json`) | None / API key                |
+| OpenRouter  | ✓        | ✓ (gateway)       | API key                       |
+| LiteLLM proxy | ✓      | ✓ (gateway)       | API key / none (self-host)    |
+| Together/Groq/Mistral/DeepSeek/Cohere | ✓ | ✓ (gateway) | API key          |
 
 ## Export Formats
 
@@ -175,6 +190,11 @@ distill-align tui
 | `chatml`           | `.json`   | ChatML markup format                           |
 | `conversation`     | `.json`   | Raw conversation schema export                 |
 | `preference`       | `.json`   | DPO preference pairs (requires judge scores)   |
+| `dpo` / `orpo`     | `.json`   | DPO / ORPO triples (score-aware when judged)   |
+| `kto`              | `.json`   | KTO unpaired rows (`prompt/completion/label`)  |
+| `grpo`             | `.json`   | GRPO groups (`prompt/completions/rewards`)     |
+| `agent`            | `.json`   | Agent / tool-call trajectories                 |
+| `rag_qa`           | `.json`   | Grounded RAG-QA rows (doubles as retrieval eval) |
 
 ## Project Structure
 

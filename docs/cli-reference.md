@@ -45,8 +45,10 @@ Synthesize chunks into structured conversations.
 distill-align synthesize INPUT [OPTIONS]
   INPUT                  Input chunks JSON file
   --output, -o           Output file path (default: ./conversations.json)
-  --provider, -p         LLM provider (openai, ollama, vllm, anthropic, gemini, azure) (default: openai)
-  --model, -m            Model name (default: gpt-4o)
+  --provider, -p         LLM provider (openai, anthropic, gemini, azure, ollama, vllm,
+                         qwen, openrouter, litellm, together, groq, mistral, deepseek,
+                         cohere) (default: openai)
+  --model, -m            Model name (default: gpt-5-mini; see Models & Pricing)
   --base-url             API base URL
   --api-key              API key (or use OPENAI_API_KEY env var)
   --concurrency, -c      Max concurrent requests (default: 5)
@@ -56,7 +58,8 @@ distill-align synthesize INPUT [OPTIONS]
   --no-cache             Disable caching
   --no-checkpoint        Disable checkpointing
   --prompts              Custom prompts directory
-  --mode                 Conversation mode: default, teach, debug, review, qa, explain
+  --mode                 Conversation mode: default, teach, debug, review, qa, explain,
+                         evol_instruct, rag_qa, tool_call, constitutional, distill
   --judge                Enable LLM-as-judge evaluation
   --judge-model          Model for judge (defaults to --model)
 
@@ -71,7 +74,8 @@ Export conversations to training formats.
 distill-align export INPUT [OPTIONS]
   INPUT                Input conversations JSON file
   --format, -f         Export formats (comma-separated): sharegpt, alpaca, chatml,
-                       conversation, hf_messages, jsonl, parquet (default: sharegpt)
+                        conversation, hf_messages, jsonl, parquet, preference, dpo,
+                        orpo, kto, grpo, agent, rag_qa (default: sharegpt)
   --output-dir, -o     Output directory (default: ./output)
   --model              Unsloth model name
   --no-unsloth         Skip Unsloth script generation
@@ -90,6 +94,27 @@ distill-align validate INPUT [OPTIONS]
   INPUT              Input conversations JSON file
   --dedupe/--no-dedupe   Remove duplicates (default: dedupe)
   --output, -o       Save report to file
+```
+
+### `distill-align evaluate`
+
+Evaluate dataset quality without LLM calls (CI-friendly gate).
+
+```bash
+distill-align evaluate INPUT [OPTIONS]
+  INPUT              Input conversations JSON file
+  --threshold        Min mean confidence 0-1 (default: 0.5)
+  --min-valid-rate   Min valid-turn rate 0-1 (default: 0.8)
+  --reference        Eval-set text file for contamination check
+  --output, -o       Save report to file
+```
+
+### `distill-align serve`
+
+Serve the REST API (`pip install distill-align[serve]`).
+
+```bash
+distill-align serve [--host 127.0.0.1] [--port 8000]
 ```
 
 ### `distill-align status`
@@ -170,10 +195,23 @@ distill-align export --input conversations.json --format sharegpt,alpaca --split
 distill-align synthesize \
     --input chunks.json \
     --provider ollama \
-    --model llama3.1 \
+    --model qwen3:30b \
     --base-url http://localhost:11434 \
     --concurrency 2 \
     --rpm 30
+```
+
+### Frontier Teacher + Cheap Judge
+
+```bash
+distill-align synthesize \
+    --input chunks.json \
+    --provider anthropic \
+    --model claude-sonnet-5 \
+    --judge --judge-model claude-haiku-4-5 \
+    --output conversations.json
+
+distill-align evaluate --input conversations.json --threshold 0.6
 ```
 
 ### Resume a Failed Job

@@ -14,12 +14,15 @@ from loguru import logger
 from ..core.exceptions import ExportError
 from ..core.schemas import ConversationSchema, ExportConfig
 from .dataset_card import DatasetCardGenerator
+from .formatters.agent_rag import AgentFormatter, RagQaFormatter
 from .formatters.alpaca import AlpacaFormatter
 from .formatters.base import BaseFormatter
 from .formatters.chatml import ChatMLFormatter
 from .formatters.conversation import ConversationFormatter
+from .formatters.grpo import GRPOFormatter
 from .formatters.hf_messages import HFMessagesFormatter
 from .formatters.jsonl import JsonlFormatter
+from .formatters.kto import KTOFormatter
 from .formatters.parquet import ParquetFormatter
 from .formatters.preference import PreferenceFormatter
 from .formatters.sharegpt import ShareGPTFormatter
@@ -37,6 +40,12 @@ FORMATTER_MAP: dict[str, type[BaseFormatter]] = {
     "jsonl": JsonlFormatter,
     "parquet": ParquetFormatter,
     "preference": PreferenceFormatter,
+    "dpo": PreferenceFormatter,
+    "orpo": PreferenceFormatter,
+    "kto": KTOFormatter,
+    "grpo": GRPOFormatter,
+    "agent": AgentFormatter,
+    "rag_qa": RagQaFormatter,
 }
 
 
@@ -74,7 +83,10 @@ class ExportPipeline:
             raise ExportError(f"Unsupported format: {format_name}. Supported: {', '.join(FORMATTER_MAP.keys())}")
 
         if format_name not in self._formatters:
-            self._formatters[format_name] = FORMATTER_MAP[format_name](self.config.output_dir)
+            if format_name in ("dpo", "orpo"):
+                self._formatters[format_name] = PreferenceFormatter(self.config.output_dir, format_type=format_name)
+            else:
+                self._formatters[format_name] = FORMATTER_MAP[format_name](self.config.output_dir)
         return self._formatters[format_name]
 
     def _get_unsloth_builder(self) -> UnslothConfigBuilder:
@@ -180,6 +192,28 @@ class ExportPipeline:
                 logger.info(f"Generated Unsloth script: {script_path}")
             except Exception as e:
                 logger.warning(f"Failed to generate Unsloth script: {e}")
+
+            # Preference / RL trainers matching the exported formats
+            for pref in ("dpo", "orpo", "kto"):
+                if pref in output_files:
+                    try:
+                        p = builder.generate_preference_script(
+                            dataset_path=str(output_files[pref]),
+                            output_dir=str(Path(self.config.output_dir) / "model"),
+                            method=pref,
+                        )
+                        output_files[f"unsloth_{pref}_script"] = p
+                    except Exception as e:
+                        logger.warning(f"Failed to generate {pref.upper()} script: {e}")
+            if "grpo" in output_files:
+                try:
+                    g = builder.generate_grpo_script(
+                        dataset_path=str(output_files["grpo"]),
+                        output_dir=str(Path(self.config.output_dir) / "model"),
+                    )
+                    output_files["unsloth_grpo_script"] = g
+                except Exception as e:
+                    logger.warning(f"Failed to generate GRPO script: {e}")
 
         # Generate dataset card
         if generate_card:

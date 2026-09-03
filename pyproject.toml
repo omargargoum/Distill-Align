@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "distill-align"
-version = "0.1.1"
+version = "0.3.0"
 description = "The Structured Reasoning Extraction Factory — Generate high-quality fine-tuning datasets from raw domain data"
 authors = ["o69dn"]
 readme = "README.md"
@@ -51,11 +51,34 @@ beautifulsoup4 = ">=4.12.0"
 huggingface_hub = {version = "^0.23.0", optional = true}
 # Optional: Parquet export
 pyarrow = {version = ">=14.0.0", optional = true}
+# Optional: advanced PII (Presidio NER pass; regex core has no extra dep)
+presidio-analyzer = {version = ">=2.2.0", optional = true}
+# Optional: semantic chunking / embeddings / eval helpers
+numpy = {version = ">=1.26.0", optional = true}
+# Optional: gateway routing (LiteLLM proxy client support)
+litellm = {version = ">=1.0.0", optional = true}
+# Optional: eval harness (DeepEval + RAGAS)
+deepeval = {version = ">=2.0.0", optional = true}
+ragas = {version = ">=0.2.0", optional = true}
+# Optional: structure-preserving parsing (Docling)
+docling = {version = ">=2.0.0", optional = true}
+# Optional: REST API server
+fastapi = {version = ">=0.110.0", optional = true}
+uvicorn = {version = ">=0.29.0", optional = true}
+# Optional: MCP server
+fastmcp = {version = ">=2.0.0", optional = true}
 
 [tool.poetry.extras]
 hub = ["huggingface_hub"]
 parquet = ["pyarrow"]
-all = ["huggingface_hub", "pyarrow"]
+pii = ["presidio-analyzer"]
+embeddings = ["numpy"]
+gateway = ["litellm"]
+eval = ["deepeval", "ragas"]
+docling = ["docling"]
+serve = ["fastapi", "uvicorn"]
+mcp = ["fastmcp"]
+all = ["huggingface_hub", "pyarrow", "presidio-analyzer", "numpy"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"

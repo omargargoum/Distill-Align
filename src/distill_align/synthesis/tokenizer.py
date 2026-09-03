@@ -15,43 +15,16 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     import tiktoken  # type: ignore[import-not-found]
 
-# Pricing per 1M tokens (USD, as of early 2026)
-MODEL_PRICING: dict[str, dict[str, float]] = {
-    # OpenAI models
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4.1": {"input": 2.00, "output": 8.00},
-    "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
-    "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "gpt-4": {"input": 30.00, "output": 60.00},
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
-    "o1": {"input": 15.00, "output": 60.00},
-    "o1-mini": {"input": 3.00, "output": 12.00},
-    "o3-mini": {"input": 1.10, "output": 4.40},
-    "o4-mini": {"input": 1.10, "output": 4.40},
-    # Claude models (Anthropic)
-    "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3-5-haiku": {"input": 0.80, "output": 4.00},
-    "claude-3-opus": {"input": 15.00, "output": 75.00},
-    "claude-3-haiku": {"input": 0.25, "output": 1.25},
-    "claude-sonnet-4": {"input": 3.00, "output": 15.00},
-    "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
-    # Gemini models (Google)
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
-    "gemini-2.0-flash-lite": {"input": 0.075, "output": 0.30},
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
-    "gemini-2.5-flash": {"input": 0.15, "output": 0.60},
-    # Azure OpenAI deployments — same as their base OpenAI models
-    # (matched dynamically via _resolve_pricing)
-    # Open-source (Ollama/vLLM) — typically free, but listed for accounting
-    "llama3.1": {"input": 0.0, "output": 0.0},
-    "llama3.2": {"input": 0.0, "output": 0.0},
-    "llama3.3": {"input": 0.0, "output": 0.0},
-    "mistral": {"input": 0.0, "output": 0.0},
-    "qwen2.5": {"input": 0.0, "output": 0.0},
-    "deepseek-r1": {"input": 0.0, "output": 0.0},
-}
+# Pricing per 1M tokens (USD). Single source of truth lives in
+# synthesis/models/catalog.py (Sep-2026 model IDs, context windows, status).
+# Kept here as an alias so existing imports keep working.
+from .models import catalog as _catalog
+from .models.catalog import pricing_table
+
+# Re-exported for backwards compat (single source lives in catalog.py).
+MODEL_ALIASES = _catalog.MODEL_ALIASES
+
+MODEL_PRICING: dict[str, dict[str, float]] = pricing_table()
 
 
 # Known prefixes for Azure deployments — strip to get the base model
@@ -60,6 +33,16 @@ AZURE_DEPLOYMENT_PREFIXES = ("gpt-", "o1", "o3", "o4")
 
 # Model to tiktoken encoding mapping
 MODEL_ENCODING_MAP: dict[str, str] = {
+    "gpt-5.6-sol": "o200k_base",
+    "gpt-5.6-terra": "o200k_base",
+    "gpt-5.6-luna": "o200k_base",
+    "gpt-5.5": "o200k_base",
+    "gpt-5.4": "o200k_base",
+    "gpt-5.4-mini": "o200k_base",
+    "gpt-5.4-nano": "o200k_base",
+    "gpt-5": "o200k_base",
+    "gpt-5-mini": "o200k_base",
+    "gpt-5-nano": "o200k_base",
     "gpt-4o": "o200k_base",
     "gpt-4o-mini": "o200k_base",
     "gpt-4.1": "o200k_base",
@@ -71,10 +54,19 @@ MODEL_ENCODING_MAP: dict[str, str] = {
     "o1": "o200k_base",
     "o1-mini": "o200k_base",
     "o3-mini": "o200k_base",
+    "o3": "o200k_base",
     "o4-mini": "o200k_base",
     "gemini-2.0-flash": "o200k_base",
     "gemini-2.5-pro": "o200k_base",
+    "gemini-3-flash": "o200k_base",
+    "gemini-3-pro": "o200k_base",
+    "gemini-3.5-flash": "o200k_base",
+    "gemini-3.8-flash": "o200k_base",
     "claude-sonnet-4": "cl100k_base",
+    "claude-sonnet-5": "cl100k_base",
+    "claude-opus-4-8": "cl100k_base",
+    "claude-fable-5": "cl100k_base",
+    "claude-haiku-4-5": "cl100k_base",
     "claude-3-5-sonnet": "cl100k_base",
 }
 
@@ -108,7 +100,7 @@ class Tokenizer:
     to character-based estimation for other models.
     """
 
-    def __init__(self, model: str = "gpt-4o"):
+    def __init__(self, model: str = "gpt-5-mini"):
         """
         Initialize the tokenizer.
 
@@ -219,7 +211,9 @@ class Tokenizer:
 
         Azure deployments often use names like ``gpt-4o-deployment``.
         This strips known prefixes to find the base model pricing, or
-        tries increasingly shorter suffixes as a fallback.
+        tries increasingly shorter suffixes as a fallback. Also normalises
+        common separators (``:``, ``/``, ``@``) used by gateways
+        (OpenRouter, LiteLLM, Together) to the bare model id.
 
         Args:
             model: Model name or Azure deployment name.
@@ -230,6 +224,20 @@ class Tokenizer:
         # Direct match first
         if model in MODEL_PRICING:
             return MODEL_PRICING[model]
+
+        # Gateway-style ids: "openai/gpt-5-mini", "anthropic/claude-sonnet-5",
+        # "meta-llama/Llama-4-Scout...:free" → try trailing segment + lower variants
+        candidates: list[str] = [model]
+        for sep in ("/", ":", "@"):
+            if sep in model:
+                candidates.append(model.split(sep)[-1])
+        # Case-insensitive fallback (e.g. "Meta-Llama-..." vs "meta-llama/...")
+        lowered = {k.lower(): v for k, v in MODEL_PRICING.items()}
+        for cand in candidates:
+            if cand in MODEL_PRICING:
+                return MODEL_PRICING[cand]
+            if cand.lower() in lowered:
+                return lowered[cand.lower()]
 
         # Azure deployment names: strip known prefixes
         for prefix in AZURE_DEPLOYMENT_PREFIXES:
@@ -269,8 +277,31 @@ class Tokenizer:
         if not isinstance(usage, dict):
             return 0.0
 
-        input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens", 0)
-        output_tokens = usage.get("completion_tokens") or usage.get("output_tokens", 0)
+        input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens") or usage.get("promptTokenCount", 0) or 0
+        output_tokens = (
+            usage.get("completion_tokens") or usage.get("output_tokens") or usage.get("candidatesTokenCount", 0) or 0
+        )
+        # Note: OpenAI/Anthropic already include reasoning + cached tokens in
+        # the top-level completion/prompt counts, so details are only a
+        # fallback when top-level keys are absent (e.g. partial usage dicts).
+        details_in = usage.get("prompt_tokens_details") or {}
+        details_out = usage.get("completion_tokens_details") or {}
+        if not isinstance(details_in, dict):
+            details_in = {}
+        if not isinstance(details_out, dict):
+            details_out = {}
+        if not input_tokens:
+            input_tokens = int(details_in.get("cached_tokens", 0) or 0)
+        if not output_tokens:
+            output_tokens = int(details_out.get("reasoning_tokens", 0) or 0)
+        try:
+            input_tokens = int(input_tokens)
+        except (TypeError, ValueError):
+            input_tokens = 0
+        try:
+            output_tokens = int(output_tokens)
+        except (TypeError, ValueError):
+            output_tokens = 0
 
         self._total_input_tokens += input_tokens
         self._total_output_tokens += output_tokens

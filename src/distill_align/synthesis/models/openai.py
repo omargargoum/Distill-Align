@@ -19,7 +19,7 @@ class OpenAIClient(BaseLLMClient):
         self,
         base_url: str = "https://api.openai.com/v1",
         api_key: str | None = None,
-        model: str = "gpt-4o",
+        model: str = "gpt-5-mini",
         timeout: float = 120.0,
         max_retries: int = 3,
     ):
@@ -29,7 +29,7 @@ class OpenAIClient(BaseLLMClient):
         Args:
             base_url: Base URL for the OpenAI API.
             api_key: OpenAI API key.
-            model: Model name (e.g., "gpt-4o", "gpt-4-turbo").
+            model: Model name (e.g., "gpt-5.6-terra", "gpt-5-mini", "gpt-5.6-sol").
             timeout: Request timeout in seconds.
             max_retries: Maximum number of retries.
         """
@@ -72,7 +72,7 @@ class OpenAIClient(BaseLLMClient):
             max_tokens: Maximum tokens to generate.
             response_format: Optional structured output format, e.g.
                 ``{"type": "json_object"}``. Requires model supporting
-                structured outputs (gpt-4o-mini, gpt-4o, etc.).
+                structured outputs (gpt-5-mini, gpt-5.6-terra, etc.).
             **kwargs: Additional parameters (e.g., top_p, frequency_penalty).
 
         Returns:
@@ -90,9 +90,22 @@ class OpenAIClient(BaseLLMClient):
             "temperature": temperature,
         }
         if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
+            # Newer reasoning models (o1+, gpt-5) only accept
+            # max_completion_tokens; send both-tolerant single key.
+            if self.model.startswith(("o1", "o3", "o4", "gpt-5")):
+                payload["max_completion_tokens"] = max_tokens
+            else:
+                payload["max_tokens"] = max_tokens
         if response_format:
             payload["response_format"] = response_format
+            # vLLM/OpenRouter guided_json passthrough: strict json_schema
+            # doubles as guided_json for OpenAI-compatible servers.
+            try:
+                schema = response_format.get("json_schema", {}).get("schema")
+            except AttributeError:
+                schema = None
+            if schema:
+                payload["guided_json"] = schema
         payload.update(kwargs)
 
         try:
@@ -102,10 +115,15 @@ class OpenAIClient(BaseLLMClient):
 
             # Parse response
             choice = data["choices"][0]
+            message = choice.get("message", {})
+            # Structured-output refusals arrive in a separate field —
+            # surface them instead of returning empty content.
+            refusal = message.get("refusal")
+            content = message.get("content") or ""
             usage = data.get("usage", {})
 
             return LLMResponse(
-                content=choice["message"]["content"],
+                content=content,
                 model=data.get("model", self.model),
                 usage={
                     "prompt_tokens": usage.get("prompt_tokens", 0),
@@ -114,6 +132,7 @@ class OpenAIClient(BaseLLMClient):
                 },
                 finish_reason=choice.get("finish_reason", "stop"),
                 raw_response=data,
+                refusal=refusal,
             )
 
         except httpx.HTTPStatusError as e:
