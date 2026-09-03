@@ -17,6 +17,7 @@ Commands:
 """
 
 import asyncio
+import contextlib
 from pathlib import Path
 from typing import Literal, cast
 
@@ -62,7 +63,6 @@ def main(
 ):
     """Distill-Align: Generate fine-tuning datasets from raw domain data."""
     setup_logging(log_level=log_level, log_file=log_file, log_format=log_format)
-    ctx.obj = {"config_file": config_file}
 
     # Async-free PyPI update check (fast, silent on failure)
     try:
@@ -75,15 +75,20 @@ def main(
     except Exception:
         pass  # never crash the CLI
 
-    # Load custom providers from config file (if any)
-    try:
-        from ..core.config_file import find_config_file, load_config
-
+    # Load custom providers from the config file (if any). An explicit
+    # --config path is honored; a missing explicit file is a hard error.
+    cfg_path: Path | None
+    if config_file:
+        cfg_path = Path(config_file)
+        if not cfg_path.exists():
+            console.print(f"[red]Error: Config file not found: {config_file}[/red]")
+            raise typer.Exit(1)
+    else:
         cfg_path = find_config_file()
-        if cfg_path:
+
+    if cfg_path is not None:
+        with contextlib.suppress(Exception):
             load_config(cfg_path)  # load_config internally registers custom providers
-    except Exception:
-        pass  # Non-fatal
 
 
 @app.command()
@@ -137,6 +142,14 @@ def ingest(
                 chunks = pipeline.ingest_directory(source_path, recursive=recursive)
 
         progress.update(task, completed=True)
+
+    if not chunks:
+        console.print(
+            "[red]Error: No chunks were produced from the input.[/red] "
+            "[yellow]The file may be empty, or the directory may contain no supported "
+            "documents (markdown, code, PDF, DOCX, HTML, CSV, JSON, Jupyter).[/yellow]"
+        )
+        raise typer.Exit(1)
 
     import json
 
@@ -201,7 +214,20 @@ def synthesize(
         console.print(f"[red]Error: Input file does not exist: {input}[/red]")
         raise typer.Exit(1)
 
+    if mode != "default":
+        try:
+            ConversationMode(mode)
+        except ValueError:
+            valid_modes = ", ".join(m.value for m in ConversationMode)
+            console.print(f"[red]Error: Invalid mode '{mode}'. Valid modes: default, {valid_modes}[/red]")
+            raise typer.Exit(1) from None
+
     chunks_data = safe_json_load(input_path)
+    if not isinstance(chunks_data, list):
+        console.print("[red]Error: Input file must contain a JSON array of chunks.[/red]")
+        raise typer.Exit(1)
+    if not chunks_data:
+        console.print("[yellow]Warning: Input file contains no chunks; the output will be empty.[/yellow]")
     chunks = [DataChunk(**chunk) for chunk in chunks_data]
 
     # Security: deprecate --api-key in favor of environment variables
@@ -318,18 +344,37 @@ def export(
     console.print(Panel.fit("📤 Export Pipeline", style="bold green"))
 
     from ..core.json_utils import safe_json_load
+    from ..exporter.pipeline import FORMATTER_MAP
 
     input_path = Path(input)
     if not input_path.exists():
         console.print(f"[red]Error: Input file does not exist: {input}[/red]")
         raise typer.Exit(1)
 
+    format_list = [f.strip() for f in formats.split(",")]
+    unknown_formats = [f for f in format_list if f not in FORMATTER_MAP]
+    if unknown_formats:
+        console.print(
+            f"[red]Error: Unsupported export format(s): {', '.join(unknown_formats)}[/red]\n"
+            f"[yellow]Supported formats: {', '.join(sorted(FORMATTER_MAP))}[/yellow]"
+        )
+        raise typer.Exit(1)
+
     conv_data = safe_json_load(input_path)
+    if not isinstance(conv_data, list):
+        console.print("[red]Error: Input file must contain a JSON array of conversations.[/red]")
+        raise typer.Exit(1)
+    if not conv_data:
+        console.print("[yellow]Warning: Input file contains no conversations; the output will be empty.[/yellow]")
     conversations = [ConversationSchema(**conv) for conv in conv_data]
 
-    format_list = [f.strip() for f in formats.split(",")]
     config = ExportConfig(
-        formats=cast(list[Literal["sharegpt", "alpaca", "chatml", "conversation", "hf_messages"]], format_list),
+        formats=cast(
+            list[
+                Literal["sharegpt", "alpaca", "chatml", "conversation", "hf_messages", "jsonl", "parquet", "preference"]
+            ],
+            format_list,
+        ),
         output_dir=output_dir,
         unsloth_model=model_name,
     )
@@ -380,6 +425,9 @@ def validate(
         raise typer.Exit(1)
 
     conv_data = safe_json_load(input_path)
+    if not isinstance(conv_data, list):
+        console.print("[red]Error: Input file must contain a JSON array of conversations.[/red]")
+        raise typer.Exit(1)
     conversations = [ConversationSchema(**conv) for conv in conv_data]
 
     validator = DatasetValidator()
@@ -501,11 +549,21 @@ def status():
     # Check env vars
     import os
 
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("DISTILL_LLM_API_KEY")
-    if api_key:
-        table.add_row("API Key", "[green]Set[/green]")
+    key_vars = {
+        "OpenAI": "OPENAI_API_KEY",
+        "Anthropic": "ANTHROPIC_API_KEY",
+        "Gemini": "GOOGLE_API_KEY",
+        "Azure OpenAI": "AZURE_OPENAI_API_KEY",
+        "Generic (DISTILL_)": "DISTILL_LLM_API_KEY",
+    }
+    set_providers = sorted(name for name, var in key_vars.items() if os.getenv(var))
+    if set_providers:
+        table.add_row("API Keys", f"[green]{', '.join(set_providers)}[/green]")
     else:
-        table.add_row("API Key", "[yellow]Not set (use OPENAI_API_KEY env var)[/yellow]")
+        table.add_row(
+            "API Keys",
+            "[yellow]Not set (use OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_API_KEY)[/yellow]",
+        )
 
     console.print(table)
 
@@ -521,7 +579,14 @@ def jobs_list(
     from ..core.checkpoint import CheckpointManager, JobStatus
 
     manager = CheckpointManager()
-    status_filter = JobStatus(status) if status else None
+    status_filter: JobStatus | None = None
+    if status:
+        try:
+            status_filter = JobStatus(status)
+        except ValueError:
+            valid_statuses = ", ".join(s.value for s in JobStatus)
+            console.print(f"[red]Error: Invalid status '{status}'. Valid statuses: {valid_statuses}[/red]")
+            raise typer.Exit(1) from None
     jobs = manager.list_jobs(status=status_filter, job_type=job_type, limit=limit)
 
     if not jobs:
@@ -607,7 +672,12 @@ def config_show():
         console.print("[yellow]No config file found. Run 'distill-align init' to create one.[/yellow]")
         return
 
-    config = load_config(config_path)
+    try:
+        config = load_config(config_path)
+    except Exception as e:
+        console.print(f"[red]Error: Failed to parse config file: {config_path}[/red]")
+        console.print(f"[yellow]{e}[/yellow]")
+        raise typer.Exit(1) from None
     console.print(Panel(str(config_path), title="Config File"))
     console.print(config.model_dump_json(indent=2))
 
@@ -623,12 +693,29 @@ def config_path():
 
 
 # Init subcommand
+@init_app.callback(invoke_without_command=True)
+def init_default(
+    ctx: typer.Context,
+    path: str = typer.Option("distill-align.yaml", "--path", "-p", help="Output config path"),
+    name: str = typer.Option("my-dataset", "--name", "-n", help="Project name"),
+) -> None:
+    """Initialize a new project config file (default command)."""
+    if ctx.invoked_subcommand is not None:
+        return  # a subcommand (e.g. `init run`) handles the invocation
+    _create_project_config(path, name)
+
+
 @init_app.command("run")
 def init_run(
     path: str = typer.Option("distill-align.yaml", "--path", "-p", help="Output config path"),
     name: str = typer.Option("my-dataset", "--name", "-n", help="Project name"),
-):
+) -> None:
     """Initialize a new project config file."""
+    _create_project_config(path, name)
+
+
+def _create_project_config(path: str, name: str) -> None:
+    """Generate a default project config file and point the user at next steps."""
     output = generate_default_config(project_name=name, path=path)
     console.print(f"[green]✓ Created config file: {output}[/green]")
     console.print("\nEdit it to configure your pipeline, then run:")

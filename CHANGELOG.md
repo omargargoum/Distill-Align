@@ -77,6 +77,15 @@ Revival release: 2026 model/practice modernization. Fully backwards-compatible
 
 ### Fixed
 - PII filter import crash caused by an inline `(?i)` regex flag in the middle of the bearer-token pattern, which broke the `scan_pii` ingestion path
+- `distill-align init` now works without the `run` subcommand, matching the README and CLI reference
+- The documented global `--config` flag is honored and errors cleanly when the file is missing
+- `synthesize --mode` and `jobs list --status` reject invalid values with a helpful message listing valid choices instead of a raw traceback
+- `export --format preference` (documented in the README) no longer crashes; unknown formats produce a clean error listing supported formats
+- `synthesize`/`export`/`validate` reject non-array JSON inputs with a clear message instead of a `TypeError`
+- `ingest` fails loudly on empty input instead of silently writing an empty chunks file
+- `status` reports API keys for all documented providers (Anthropic, Gemini, Azure, generic) instead of only OpenAI
+- `config show` reports unparseable config files gracefully
+- Generated config template no longer contains an invalid tab character that made every `distill-align init` config unparseable YAML
 
 ## [0.1.1] - 2026-06-18
 
